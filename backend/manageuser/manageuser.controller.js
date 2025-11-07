@@ -9,12 +9,12 @@ const {
   getUserRoles
 } = require('./manageuser.service');
 
-// Get all users (with optional includeDeleted query param)
+// Get all users (with optional includeDeleted query param, and pagination)
 const getUsers = async (req, res) => {
   try {
-    const { includeDeleted = false } = req.query;
-    const users = await getAllUsers(includeDeleted === 'true');
-    res.json({ success: true, users });
+    const { includeDeleted = false, page, limit } = req.query;
+    const { users, total } = await getAllUsers(includeDeleted === 'true', page ? parseInt(page) : null, limit ? parseInt(limit) : null);
+    res.json({ success: true, users, total });
   } catch (error) {
     console.error('Error fetching users:', error);
     res.status(500).json({ success: false, message: error.message });

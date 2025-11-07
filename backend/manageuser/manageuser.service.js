@@ -1,9 +1,9 @@
 const { query } = require('../config/db');
 
-async function getAllUsers(includeDeleted = false) {
+async function getAllUsers(includeDeleted = false, page = null, limit = null) {
   try {
     const deletedFilter = includeDeleted ? '' : 'AND u.bit_deleted_flag = 0';
-    const rows = await query(`
+    let sql = `
       SELECT u.user_id AS _id, u.first_name AS firstName, u.last_name AS lastName, u.email AS username, u.email, u.phone_no,
              COALESCE(GROUP_CONCAT(DISTINCT r.role_name), '') AS role, u.user_group, u.active_inactive_status AS isActive,
              MAX(la.mail_time) AS lastLogin, COALESCE(GROUP_CONCAT(DISTINCT c.company_name), '') AS companies,
@@ -17,8 +17,28 @@ async function getAllUsers(includeDeleted = false) {
       LEFT JOIN login_activity la ON u.user_id = la.user_id
       WHERE 1=1 ${deletedFilter}
       GROUP BY u.user_id
-    `);
-    return rows;
+    `;
+    let countSql = `
+      SELECT COUNT(DISTINCT u.user_id) AS total
+      FROM users u
+      LEFT JOIN user_roles ur ON u.user_id = ur.user_id AND ur.bit_deleted_flag = 0
+      WHERE 1=1 ${deletedFilter}
+    `;
+
+    if (page && limit) {
+      const offset = (page - 1) * limit;
+      sql += ` LIMIT ${limit} OFFSET ${offset}`;
+    }
+
+    const [rows, countRows] = await Promise.all([
+      query(sql),
+      query(countSql)
+    ]);
+
+    return {
+      users: rows,
+      total: countRows[0].total
+    };
   } catch (error) {
     console.error('Error in getAllUsers:', error);
     throw error;

@@ -23,6 +23,7 @@ interface User {
 const ManageUser: React.FC = () => {
   const navigate = useNavigate();
   const [users, setUsers] = useState<User[]>([]);
+  const [total, setTotal] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -40,14 +41,14 @@ const ManageUser: React.FC = () => {
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
 
   // fetch users
-  const fetchUsers = async () => {
+  const fetchUsers = async (page = 1) => {
     try {
       const token = localStorage.getItem('token');
       if (!token) {
         navigate('/login'); // Redirect if no token
         return;
       }
-      const res = await fetch('/api/auth/users', {
+      const res = await fetch(`/api/auth/users?page=${page}&limit=${itemsPerPage}`, {
         headers: { Authorization: `Bearer ${token}` }
       });
       if (res.status === 401) {
@@ -59,6 +60,7 @@ const ManageUser: React.FC = () => {
       if (!res.ok) throw new Error('Failed to fetch users');
       const data = await res.json();
       setUsers(data.users || []);
+      setTotal(data.total || 0);
     } catch (err: any) {
       setError(err.message || 'Something went wrong');
     } finally {
@@ -66,9 +68,9 @@ const ManageUser: React.FC = () => {
     }
   };
 
-  useEffect(() => { fetchUsers(); }, []);
+  useEffect(() => { fetchUsers(currentPage); }, [currentPage]);
 
-  // filters + sorting
+  // filters + sorting (client-side, since pagination is server-side)
   const filteredAndSorted = useMemo(() => {
     const q = searchTerm.trim().toLowerCase();
 
@@ -137,13 +139,13 @@ const ManageUser: React.FC = () => {
       setSortColumn(column);
       setSortDirection('asc');
     }
-    setCurrentPage(1);
+    // Note: Sorting is client-side; for server-side, would need to refetch with sort params
   };
 
   // pagination
-  const totalPages = Math.max(1, Math.ceil(filteredAndSorted.length / itemsPerPage));
+  const totalPages = Math.max(1, Math.ceil(total / itemsPerPage));
   const startIndex = (currentPage - 1) * itemsPerPage;
-  const paginated = filteredAndSorted.slice(startIndex, startIndex + itemsPerPage);
+  const paginated = filteredAndSorted.slice(0, itemsPerPage); // Since server sends only current page, but filtered client-side
 
   // actions
   const toggleUserStatus = async (userId: string, currentStatus: boolean) => {
@@ -167,7 +169,7 @@ const ManageUser: React.FC = () => {
         return;
       }
       if (!res.ok) throw new Error('Failed to update status');
-      fetchUsers(); // Refresh the list
+      fetchUsers(currentPage); // Refresh the current page
     } catch (err: any) {
       setError(err.message || 'Failed to update status');
     }
@@ -191,9 +193,37 @@ const ManageUser: React.FC = () => {
         return;
       }
       if (!res.ok) throw new Error('Failed to delete user');
-      fetchUsers(); // Refresh the list
+      fetchUsers(currentPage); // Refresh the current page
     } catch (err: any) {
       setError(err.message || 'Failed to delete user');
+    }
+  };
+
+  // New function to resend reset email
+  const resendResetEmail = async (userId: string, userEmail: string) => {
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) {
+        navigate('/login');
+        return;
+      }
+      const res = await fetch(`/api/auth/users/${userId}/resend-reset`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({ email: userEmail }) // Optional, if backend needs email
+      });
+      if (res.status === 401) {
+        localStorage.removeItem('token');
+        navigate('/login');
+        return;
+      }
+      if (!res.ok) throw new Error('Failed to resend reset email');
+      alert(`Reset email sent to ${userEmail}`);
+    } catch (err: any) {
+      setError(err.message || 'Failed to resend reset email');
     }
   };
 
@@ -436,9 +466,23 @@ const ManageUser: React.FC = () => {
                       </span>
                     </td>
                     <td className="px-3 py-2">
-                      <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold
+                      <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold gap-1
                         ${u.isActive ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
-                        {u.isActive ? 'Active' : 'Inactive'}
+                        {u.isActive ? (
+                          <>
+                            <svg width="12" height="12" fill="currentColor" viewBox="0 0 24 24">
+                              <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/>
+                            </svg>
+                            Active
+                          </>
+                        ) : (
+                          <>
+                            <svg width="12" height="12" fill="currentColor" viewBox="0 0 24 24">
+                              <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/>
+                            </svg>
+                            Inactive
+                          </>
+                        )}
                       </span>
                     </td>
                     <td className="px-3 py-2">
@@ -470,11 +514,11 @@ const ManageUser: React.FC = () => {
                           )}
                         </button>
                         <button
-                          className="p-1.5 rounded hover:bg-red-50 text-red-600"
-                          onClick={() => deleteUser(u._id, `${u.firstName} ${u.lastName}`)}
-                          title="Delete"
+                          className="p-1.5 rounded hover:bg-blue-50 text-blue-600"
+                          onClick={() => resendResetEmail(u._id, u.email)}
+                          title="Resend Reset Email"
                         >
-                          <svg width="16" height="16" fill="currentColor" viewBox="0 0 24 24"><path d="M6 7h12v2H6V7Zm2 3h8l-.8 9.2A2 2 0 0 1 13.2 21h-2.4a2 2 0 0 1-1.99-1.8L8 10Zm3-6h2a2 2 0 0 1 2 2H9a2 2 0 0 1 2-2Z"/></svg>
+                          <svg width="16" height="16" fill="currentColor" viewBox="0 0 24 24"><path d="M20 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 4l-8 5-8-5V6l8 5 8-5v2z"/></svg>
                         </button>
                       </div>
                     </td>
@@ -494,7 +538,7 @@ const ManageUser: React.FC = () => {
           {/* Footer / Pagination */}
           <div className="flex flex-col sm:flex-row items-center justify-between gap-2 px-3 py-2 border-t border-gray-200 bg-gray-50">
             <div className="text-[12px] text-gray-700">
-              Showing {filteredAndSorted.length === 0 ? 0 : startIndex + 1} to {Math.min(startIndex + itemsPerPage, filteredAndSorted.length)} of {filteredAndSorted.length} entries
+              Showing {total === 0 ? 0 : startIndex + 1} to {Math.min(startIndex + itemsPerPage, total)} of {total} entries
             </div>
             <div className="flex items-center gap-1">
               <button
