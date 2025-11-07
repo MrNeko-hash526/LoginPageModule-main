@@ -1,6 +1,7 @@
 const { query } = require('../config/db');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
+const crypto = require('crypto');
 
 const JWT_SECRET = process.env.JWT_SECRET || 'change_me';
 const JWT_EXPIRES = process.env.JWT_EXPIRES || '8h';
@@ -322,6 +323,34 @@ async function removeRole(userId, companyId, roleId) {
   }
 }
 
+// Set new password after token verification - Updated: Use mail_time for 24h expiry, set pass_exp_date to 6 months
+async function setPassword(email, token, newPassword) {
+  // Hash the provided token
+  const hashedToken = crypto.createHash('sha256').update(token).digest('hex');
+
+  // Find user by email, matching hashed token in login_activity, and otp not expired (within 24 hours)
+  const user = await query(`
+    SELECT u.user_id 
+    FROM users u 
+    JOIN login_activity la ON u.user_id = la.user_id 
+    WHERE u.email = ? AND la.otp = ? AND la.mail_time > DATE_SUB(NOW(), INTERVAL 24 HOUR)
+  `, [email, hashedToken]);
+
+  if (!user[0]) {
+    throw new Error('Invalid or expired token');
+  }
+
+  // Hash the new password
+  const hashedPassword = await bcrypt.hash(newPassword, 12);
+
+  // Update password, set pass_exp_date to 6 months from now, and remove the login_activity entry
+  const passwordExpiry = new Date(Date.now() + 6 * 30 * 24 * 60 * 60 * 1000);  // Approx 6 months
+  await query('UPDATE users SET password_hash = ?, pass_exp_date = ? WHERE user_id = ?', [hashedPassword, passwordExpiry, user[0].user_id]);
+  await query('DELETE FROM login_activity WHERE user_id = ? AND otp = ?', [user[0].user_id, hashedToken]);
+
+  return { success: true, message: 'Password updated successfully' };
+}
+
 module.exports = { 
   login, 
   findUserByEmail, 
@@ -335,5 +364,6 @@ module.exports = {
   getUserRoles,
   assignRole,
   removeRole,
-  getCompaniesForEmail  // Added
+  getCompaniesForEmail,  // Added
+  setPassword  // Added
 };
