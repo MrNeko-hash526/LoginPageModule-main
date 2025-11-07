@@ -17,6 +17,7 @@ interface User {
   userType: string;
   code: string;
   companyStatus: string;
+  isDeleted: boolean; // Added for completeness
 }
 
 const ManageUser: React.FC = () => {
@@ -42,9 +43,19 @@ const ManageUser: React.FC = () => {
   const fetchUsers = async () => {
     try {
       const token = localStorage.getItem('token');
+      if (!token) {
+        navigate('/login'); // Redirect if no token
+        return;
+      }
       const res = await fetch('/api/auth/users', {
         headers: { Authorization: `Bearer ${token}` }
       });
+      if (res.status === 401) {
+        // Token expired or invalid, clear and redirect
+        localStorage.removeItem('token');
+        navigate('/login');
+        return;
+      }
       if (!res.ok) throw new Error('Failed to fetch users');
       const data = await res.json();
       setUsers(data.users || []);
@@ -138,17 +149,27 @@ const ManageUser: React.FC = () => {
   const toggleUserStatus = async (userId: string, currentStatus: boolean) => {
     try {
       const token = localStorage.getItem('token');
-      await fetch(`/api/auth/users/${userId}`, {
-        method: 'PUT',
+      if (!token) {
+        navigate('/login');
+        return;
+      }
+      const res = await fetch(`/api/auth/users/${userId}/status`, {
+        method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`
         },
         body: JSON.stringify({ isActive: !currentStatus })
       });
-      fetchUsers();
-    } catch {
-      // no-op UI
+      if (res.status === 401) {
+        localStorage.removeItem('token');
+        navigate('/login');
+        return;
+      }
+      if (!res.ok) throw new Error('Failed to update status');
+      fetchUsers(); // Refresh the list
+    } catch (err: any) {
+      setError(err.message || 'Failed to update status');
     }
   };
 
@@ -156,13 +177,23 @@ const ManageUser: React.FC = () => {
     if (!confirm(`Delete ${userName}?`)) return;
     try {
       const token = localStorage.getItem('token');
-      await fetch(`/api/auth/users/${userId}`, {
+      if (!token) {
+        navigate('/login');
+        return;
+      }
+      const res = await fetch(`/api/auth/users/${userId}`, {
         method: 'DELETE',
         headers: { Authorization: `Bearer ${token}` }
       });
-      fetchUsers();
-    } catch {
-      // no-op UI
+      if (res.status === 401) {
+        localStorage.removeItem('token');
+        navigate('/login');
+        return;
+      }
+      if (!res.ok) throw new Error('Failed to delete user');
+      fetchUsers(); // Refresh the list
+    } catch (err: any) {
+      setError(err.message || 'Failed to delete user');
     }
   };
 
