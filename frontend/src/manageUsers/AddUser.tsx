@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import * as yup from 'yup';
 
 interface UserGroup { id: string; name: string; }
-interface User { id: string; name: string; email: string; firstName: string; lastName: string; phoneNo: string; }  // Changed from Contact
+interface User { id: string; _id?: string; name: string; email: string; firstName: string; lastName: string; phoneNo?: string; phone_no?: string; }  // Changed from Contact
 interface Company { id: string; name: string; parentId?: string; }
 
 interface NewUserForm {
@@ -59,13 +59,23 @@ const AddUser: React.FC = () => {
     fetchCompanies();
   }, [navigate]);
 
-  const fetchUsers = async () => {  // Changed from fetchExistingContacts
+  const fetchUsers = async () => {
     try {
       const token = localStorage.getItem('token');
-      const res = await fetch('/api/auth/users', { headers: { Authorization: `Bearer ${token}` } });  // Changed to /users
-      if (res.ok) setUsers((await res.json()).users || []);  // Changed to users
-    } catch {}
+      const res = await fetch('/api/auth/users', { headers: { Authorization: `Bearer ${token}` } });
+      if (res.ok) {
+        const data = await res.json();
+        console.log('API response:', data); // Debug log
+        setUsers(data.users || []);
+        console.log('Users state set to:', data.users); // Debug log
+      } else {
+        console.error('Failed to fetch users, status:', res.status);
+      }
+    } catch (error) {
+      console.error('Error fetching users:', error);
+    }
   };
+
   const fetchCompanies = async () => {
     try {
       const token = localStorage.getItem('token');
@@ -74,17 +84,27 @@ const AddUser: React.FC = () => {
     } catch {}
   };
 
-  const handleExistingUserChange = (userId: string) => {  // New function
-    const selectedUser = users.find(u => u.id === userId);
+  const handleExistingUserChange = (userId: string) => {
+    console.log('Selected userId:', userId);
+    console.log('Available users:', users);
+    
+    if (!userId) return; // Guard against empty selection
+    
+    const selectedUser = users.find(u => ((u._id ?? u.id).toString() === userId.toString())); // Use _id if present, otherwise fallback to id
+    console.log('Found user:', selectedUser);
+    
     if (selectedUser) {
       setFormData({
         ...formData,
-        existingUserId: userId,  // Changed from existingContactId
-        firstName: selectedUser.firstName,
-        lastName: selectedUser.lastName,
-        email: selectedUser.email,
-        phoneNo: selectedUser.phoneNo
+        existingUserId: userId,
+        firstName: selectedUser.firstName || '',
+        lastName: selectedUser.lastName || '',
+        email: selectedUser.email || '',
+        phoneNo: selectedUser.phone_no || ''
       });
+      console.log('Form data updated');
+    } else {
+      console.log('User not found for ID:', userId);
     }
   };
 
@@ -230,18 +250,20 @@ const AddUser: React.FC = () => {
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-gray-700 mb-1">Existing Users:</label>  // Changed label
+                <label className="block text-xs font-semibold text-gray-700 mb-1">Existing Users:</label>
                 <select
-                  value={formData.existingUserId}  // Changed from existingContactId
-                  onChange={(e) => handleExistingUserChange(e.target.value)}  // Use new function
+                  value={formData.existingUserId}
+                  onChange={(e) => handleExistingUserChange(e.target.value)}
                   className="w-full border border-gray-300 rounded px-3 py-2 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-gray-500"
                 >
                   <option value="">Select Existing User</option>
-                  {users.map(u => (  // Changed from existingContacts
-                    <option key={u.id} value={u.id}>{u.name} - {u.email}</option>
+                  {users.map(u => (
+                    <option key={u._id} value={u._id}>  {/* Use _id for both key and value */}
+                      {`${u.firstName} ${u.lastName}`}  {/* Create name from firstName + lastName */}
+                    </option>
                   ))}
                 </select>
-                {errors.existingUserId && <p className="text-red-600 text-xs mt-1">{errors.existingUserId}</p>}  // Changed from existingContactId
+                {errors.existingUserId && <p className="text-red-600 text-xs mt-1">{errors.existingUserId}</p>}
               </div>
             </div>
 

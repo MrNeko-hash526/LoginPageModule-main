@@ -11,14 +11,26 @@ async function getUserGroups() {
   return rows;
 }
 
-// Get existing users
+// Get existing users - make sure this matches the adduser endpoint
 async function getUsers() {
-  const rows = await query(`
-    SELECT user_id AS id, CONCAT(first_name, ' ', last_name) AS name, email, first_name, last_name, phone_no
-    FROM users 
-    WHERE bit_deleted_flag = 0
-  `);
-  return rows;
+  try {
+    const rows = await query(`
+      SELECT 
+        user_id AS _id,  -- Use _id to match manageuser format
+        CONCAT(first_name, ' ', last_name) AS name, 
+        email,
+        first_name AS firstName,
+        last_name AS lastName,
+        phone_no
+      FROM users 
+      WHERE bit_deleted_flag = 0
+    `);
+    console.log('Users fetched from adduser service:', rows);
+    return rows;
+  } catch (error) {
+    console.error('Error in getUsers service:', error);
+    throw error;
+  }
 }
 
 // Get companies

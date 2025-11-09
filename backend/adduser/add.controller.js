@@ -31,9 +31,10 @@ const getUserGroupsController = async (req, res) => {
 const getUsersController = async (req, res) => {
   try {
     const users = await getUsers();  // Changed from getContacts
+    console.log('Controller sending users:', users); // Debug log
     res.json({ users });  // Changed from { contacts }
   } catch (error) {
-    console.error('Error fetching users:', error);
+    console.error('Error fetching users in controller:', error);
     res.status(500).json({ success: false, message: error.message });
   }
 };
