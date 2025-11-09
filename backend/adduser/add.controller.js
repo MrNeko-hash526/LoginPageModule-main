@@ -1,9 +1,10 @@
 const { 
   createUser,
   getUserGroups,
-  getUsers,  // Changed from getContacts
-  getCompanies
-} = require('./add.service'); // Updated to import from add.service.js
+  getUsers,
+  getCompanies,
+  getRoles
+} = require('./add.service');
 
 // Create user
 const createUserController = async (req, res) => {
@@ -12,7 +13,7 @@ const createUserController = async (req, res) => {
     res.json(result);
   } catch (error) {
     console.error('Error creating user:', error);
-    res.status(500).json({ success: false, message: error.message });
+    res.status(400).json({ success: false, message: error.message });
   }
 };
 
@@ -27,12 +28,23 @@ const getUserGroupsController = async (req, res) => {
   }
 };
 
-// Get existing users (changed from getContacts)
+// Get roles
+const getRolesController = async (req, res) => {
+  try {
+    const roles = await getRoles();
+    res.json({ roles });
+  } catch (error) {
+    console.error('Error fetching roles:', error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// Get existing users
 const getUsersController = async (req, res) => {
   try {
-    const users = await getUsers();  // Changed from getContacts
-    console.log('Controller sending users:', users); // Debug log
-    res.json({ users });  // Changed from { contacts }
+    const users = await getUsers();
+    console.log('Controller sending users:', users);
+    res.json({ users });
   } catch (error) {
     console.error('Error fetching users in controller:', error);
     res.status(500).json({ success: false, message: error.message });
@@ -53,6 +65,7 @@ const getCompaniesController = async (req, res) => {
 module.exports = {
   createUser: createUserController,
   getUserGroups: getUserGroupsController,
-  getUsers: getUsersController,  // Changed from getContacts
-  getCompanies: getCompaniesController
+  getUsers: getUsersController,
+  getCompanies: getCompaniesController,
+  getRoles: getRolesController
 };

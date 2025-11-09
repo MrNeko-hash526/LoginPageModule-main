@@ -5,10 +5,39 @@ const nodemailer = require('nodemailer');
 
 const JWT_SECRET = process.env.JWT_SECRET || 'change_me';
 
-// Get user groups
+// Get user groups from database (without description)
 async function getUserGroups() {
-  const rows = await query('SELECT id, name FROM user_groups'); // Assuming user_groups table exists
-  return rows;
+  try {
+    const rows = await query(`
+      SELECT 
+        group_id AS id, 
+        group_name AS name
+      FROM user_groups 
+      WHERE bit_deleted_flag = 0 AND is_active = 1
+      ORDER BY group_name
+    `);
+    return rows;
+  } catch (error) {
+    console.error('Error in getUserGroups service:', error);
+    throw error;
+  }
+}
+
+// Get roles from database
+async function getRoles() {
+  try {
+    const rows = await query(`
+      SELECT 
+        role_id AS id, 
+        role_name AS name
+      FROM roles 
+      ORDER BY role_name
+    `);
+    return rows;
+  } catch (error) {
+    console.error('Error in getRoles service:', error);
+    throw error;
+  }
 }
 
 // Get existing users - make sure this matches the adduser endpoint
@@ -39,47 +68,92 @@ async function getCompanies() {
   return rows;
 }
 
+// Check if user already has the role in the company
+async function checkUserRoleExists(userId, companyId, roleName) {
+  try {
+    const rows = await query(`
+      SELECT ur.user_role_id 
+      FROM user_roles ur
+      JOIN roles r ON ur.role_id = r.role_id
+      WHERE ur.user_id = ? AND ur.company_id = ? AND r.role_name = ? AND ur.bit_deleted_flag = 0
+    `, [userId, companyId, roleName]);
+    
+    return rows.length > 0;
+  } catch (error) {
+    console.error('Error checking user role exists:', error);
+    throw error;
+  }
+}
+
 // Create user (new or from existing user) - Updated: Use existingUserId
 async function createUser(payload) {
-  const { companyId, existingUserId, firstName, lastName, email, phoneNo, role, userGroup, isActive } = payload;
+  const { companyId, existingUserId, firstName, lastName, email, confirmEmail, phoneNo, role, userGroup, isActive } = payload;
 
   let userData;
+  let userId;
+  
   if (existingUserId) {
+    // Using existing user
     const user = await query('SELECT first_name, last_name, email, phone_no FROM users WHERE user_id = ? AND bit_deleted_flag = 0', [existingUserId]);
     if (!user[0]) throw new Error('User not found');
+    
+    userId = existingUserId;
+    
+    // Check if user already has this role in this company
+    const roleExists = await checkUserRoleExists(userId, companyId, role);
+    if (roleExists) {
+      throw new Error(`User already has the role "${role}" in this company. Please select a different role or user.`);
+    }
+    
     userData = {
       first_name: user[0].first_name,
       last_name: user[0].last_name,
       email: user[0].email,
       phone_no: user[0].phone_no,
-      user_group: userGroup,
+      user_group: JSON.stringify(userGroup || []),
       active_inactive_status: isActive ? 1 : 0
     };
+    
+    // Update existing user's group and status
+    await query('UPDATE users SET user_group = ?, active_inactive_status = ? WHERE user_id = ?', 
+      [userData.user_group, userData.active_inactive_status, userId]);
+      
   } else {
+    // Creating new user
+    if (!email || !confirmEmail || email !== confirmEmail) {
+      throw new Error('Email and confirm email must match');
+    }
+    
+    // Check if email already exists
+    const existingUser = await query('SELECT user_id FROM users WHERE email = ? AND bit_deleted_flag = 0', [email]);
+    if (existingUser.length > 0) {
+      throw new Error('User with this email already exists. Please use the existing user option or choose a different email.');
+    }
+    
     userData = {
       first_name: firstName,
       last_name: lastName,
       email,
       phone_no: phoneNo,
-      user_group: userGroup,
-      active_inactive_status: isActive ? 1 : 0
+      user_group: JSON.stringify(userGroup || []),
+      active_inactive_status: isActive ? 1 : 0,
+      bit_deleted_flag: 0,
+      created_date: new Date()
     };
+
+    // Insert new user
+    const result = await query('INSERT INTO users SET ?', [userData]);
+    userId = result.insertId;
   }
-
-  // Store userGroup as JSON string in users.user_group
-  userData.user_group = JSON.stringify(payload.userGroup);  // Array of names
-
-  // Insert into users
-  const result = await query('INSERT INTO users SET ?', [userData]);
-  const userId = result.insertId;
 
   // Get role_id from roles table
   const roleRow = await query('SELECT role_id FROM roles WHERE role_name = ?', [role]);
-  if (!roleRow[0]) throw new Error('Role not found');
+  if (!roleRow[0]) throw new Error(`Role "${role}" not found`);
   const roleId = roleRow[0].role_id;
 
   // Insert into user_roles
-  await query('INSERT INTO user_roles (user_id, company_id, role_id, bit_deleted_flag) VALUES (?, ?, ?, 0)', [userId, companyId, roleId]);
+  await query('INSERT INTO user_roles (user_id, company_id, role_id, bit_deleted_flag, created_date) VALUES (?, ?, ?, 0, NOW())', 
+    [userId, companyId, roleId]);
 
   // Generate secure token using crypto (random bytes)
   const resetToken = crypto.randomBytes(32).toString('hex');  // 64-char hex token (random)
@@ -88,10 +162,14 @@ async function createUser(payload) {
   await query('INSERT INTO login_activity (user_id, otp, mail_time) VALUES (?, ?, NOW())', [userId, resetToken]);
 
   // Send reset email with plain token in link
-  const resetLink = `${process.env.FRONTEND_URL}/reset-password?token=${resetToken}&email=${encodeURIComponent(email)}`;
-  await sendResetEmail(email, resetToken);
+  await sendResetEmail(userData.email, resetToken);
 
-  return { success: true, message: 'User created successfully. Reset email sent.' };
+  return { 
+    success: true, 
+    message: existingUserId ? 
+      'User role assigned successfully. Reset email sent.' : 
+      'User created successfully. Reset email sent.' 
+  };
 }
 
 // Send reset email
@@ -143,9 +221,10 @@ async function setPassword(email, token, newPassword) {
 }
 
 module.exports = { 
-  createUser,  // Export the function, not controller
+  createUser,
   getUserGroups,
-  getUsers,  // Export the function
+  getUsers,
   getCompanies,
-  setPassword  // Add this back
+  getRoles,  // Add this export
+  setPassword
 };

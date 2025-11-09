@@ -3,51 +3,48 @@ import { useNavigate } from 'react-router-dom';
 import * as yup from 'yup';
 
 interface UserGroup { id: string; name: string; }
-interface User { id: string; _id?: string; name: string; email: string; firstName: string; lastName: string; phoneNo?: string; phone_no?: string; }  // Changed from Contact
+interface User { id: string; _id?: string; name: string; email: string; firstName: string; lastName: string; phoneNo?: string; phone_no?: string; }
 interface Company { id: string; name: string; parentId?: string; }
+interface Role { id: string; name: string; }
 
 interface NewUserForm {
   firstName: string; lastName: string; email: string; confirmEmail: string;
-  phoneNo?: string; role: string; userGroup?: string; isActive: boolean;
+  phoneNo?: string; role: string; userGroup: string[]; isActive: boolean;
 }
 interface ExistingUserForm {
-  existingUserId: string; role: string; userGroup?: string; isActive: boolean;  // Changed from existingContactId
+  existingUserId: string; role: string; userGroup?: string[]; isActive: boolean;
 }
-
-// Define user groups as a constant array (or enum)
-const USER_GROUPS = [
-  { id: '1', name: 'Admin Group' },
-  { id: '2', name: 'Sales Team' },
-  { id: '3', name: 'IT Department' }
-];
-
-// If you prefer an enum for type safety:
-// enum UserGroupEnum {
-//   AdminGroup = 'Admin Group',
-//   SalesTeam = 'Sales Team',
-//   ITDepartment = 'IT Department'
-// }
-// const USER_GROUPS = Object.values(UserGroupEnum).map((name, index) => ({ id: (index + 1).toString(), name }));
 
 const AddUser: React.FC = () => {
   const navigate = useNavigate();
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [users, setUsers] = useState<User[]>([]);  // Changed from existingContacts
+  const [users, setUsers] = useState<User[]>([]);
   const [companies, setCompanies] = useState<Company[]>([]);
+  const [userGroups, setUserGroups] = useState<UserGroup[]>([]);
+  const [roles, setRoles] = useState<Role[]>([]);
   const [errors, setErrors] = useState<{ [key: string]: string }>({});
+
+  // Add these new state variables for dropdown functionality
+  const [showUserGroupDropdown, setShowUserGroupDropdown] = useState(false);
+  const [userGroupSearch, setUserGroupSearch] = useState('');
 
   const [formData, setFormData] = useState({
     companyId: '',
-    existingUserId: '',  // Changed from existingContactId
+    existingUserId: '',
     firstName: '',
     lastName: '',
     email: '',
     confirmEmail: '',
     phoneNo: '',
     role: '',
-    userGroup: '',
+    userGroup: [] as string[],
     isActive: true
   });
+
+  // Single declaration of filteredUserGroups
+  const filteredUserGroups = userGroups.filter(group =>
+    group.name.toLowerCase().includes(userGroupSearch.toLowerCase())
+  );
 
   useEffect(() => {
     const token = localStorage.getItem('token');
@@ -55,9 +52,32 @@ const AddUser: React.FC = () => {
       navigate('/login');
       return;
     }
-    fetchUsers();  // Changed from fetchExistingContacts
+    fetchUsers();
     fetchCompanies();
+    fetchUserGroups();
+    fetchRoles();
   }, [navigate]);
+
+  // Update the click outside handler to be more specific
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as HTMLElement;
+      
+      // Don't close if clicking inside the dropdown or its children
+      if (target.closest('.user-group-dropdown')) {
+        return;
+      }
+      
+      if (showUserGroupDropdown) {
+        setShowUserGroupDropdown(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [showUserGroupDropdown]);
 
   const fetchUsers = async () => {
     try {
@@ -65,11 +85,7 @@ const AddUser: React.FC = () => {
       const res = await fetch('/api/auth/users', { headers: { Authorization: `Bearer ${token}` } });
       if (res.ok) {
         const data = await res.json();
-        console.log('API response:', data); // Debug log
         setUsers(data.users || []);
-        console.log('Users state set to:', data.users); // Debug log
-      } else {
-        console.error('Failed to fetch users, status:', res.status);
       }
     } catch (error) {
       console.error('Error fetching users:', error);
@@ -80,18 +96,45 @@ const AddUser: React.FC = () => {
     try {
       const token = localStorage.getItem('token');
       const res = await fetch('/api/auth/companies', { headers: { Authorization: `Bearer ${token}` } });
-      if (res.ok) setCompanies((await res.json()).companies || []);
-    } catch {}
+      if (res.ok) {
+        const data = await res.json();
+        setCompanies(data.companies || []);
+      }
+    } catch (error) {
+      console.error('Error fetching companies:', error);
+    }
+  };
+
+  const fetchUserGroups = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch('/api/auth/user-groups', { headers: { Authorization: `Bearer ${token}` } });
+      if (res.ok) {
+        const data = await res.json();
+        setUserGroups(data.userGroups || []);
+      }
+    } catch (error) {
+      console.error('Error fetching user groups:', error);
+    }
+  };
+
+  const fetchRoles = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch('/api/auth/roles', { headers: { Authorization: `Bearer ${token}` } });
+      if (res.ok) {
+        const data = await res.json();
+        setRoles(data.roles || []);
+      }
+    } catch (error) {
+      console.error('Error fetching roles:', error);
+    }
   };
 
   const handleExistingUserChange = (userId: string) => {
-    console.log('Selected userId:', userId);
-    console.log('Available users:', users);
+    if (!userId) return;
     
-    if (!userId) return; // Guard against empty selection
-    
-    const selectedUser = users.find(u => ((u._id ?? u.id).toString() === userId.toString())); // Use _id if present, otherwise fallback to id
-    console.log('Found user:', selectedUser);
+    const selectedUser = users.find(u => ((u._id ?? u.id).toString() === userId.toString()));
     
     if (selectedUser) {
       setFormData({
@@ -102,32 +145,40 @@ const AddUser: React.FC = () => {
         email: selectedUser.email || '',
         phoneNo: selectedUser.phone_no || ''
       });
-      console.log('Form data updated');
-    } else {
-      console.log('User not found for ID:', userId);
     }
   };
 
-  const getCompanyOptions = () => {
-    return companies.map(c => <option key={c.id} value={c.id}>{c.name}</option>);
+  const handleUserGroupChange = (groupName: string) => {
+    const currentGroups = formData.userGroup;
+    const isSelected = currentGroups.includes(groupName);
+    
+    let newGroups;
+    if (isSelected) {
+      newGroups = currentGroups.filter(g => g !== groupName);
+    } else {
+      newGroups = [...currentGroups, groupName];
+    }
+    
+    setFormData({ ...formData, userGroup: newGroups });
+    clearError('userGroup');
   };
 
   const newUserSchema = yup.object().shape({
-    companyId: yup.string().required('Company is required'),  // Updated message
+    companyId: yup.string().required('Company is required'),
     firstName: yup.string().required('First name is required'),
     lastName: yup.string().required('Last name is required'),
     email: yup.string().email('Invalid email').required('Email is required'),
     confirmEmail: yup.string().oneOf([yup.ref('email')], 'Emails must match').required('Confirm email is required'),
     phoneNo: yup.string().required('Phone is required').matches(/^\d{10}$/, 'Must be 10 digits'),
     role: yup.string().required('Role is required'),
-    userGroup: yup.string().required('User group is required'),
+    userGroup: yup.array().min(1, 'At least one user group is required'),
     isActive: yup.boolean().oneOf([true], 'Must be active')
   });
+
   const existingUserSchema = yup.object().shape({
-    companyId: yup.string().required('Company is required'),  // Updated message
-    existingUserId: yup.string().required('Existing user is required'),  // Changed from existingContactId
+    companyId: yup.string().required('Company is required'),
+    existingUserId: yup.string().required('Existing user is required'),
     role: yup.string().required('Role is required'),
-    userGroup: yup.string().required('User group is required'),
     isActive: yup.boolean().oneOf([true], 'Must be active')
   });
 
@@ -135,44 +186,43 @@ const AddUser: React.FC = () => {
     e.preventDefault();
     setErrors({});
     try {
-      const isExisting = formData.existingUserId.trim() !== '';  // Changed from existingContactId
+      const isExisting = formData.existingUserId.trim() !== '';
       const schema = isExisting ? existingUserSchema : newUserSchema;
       const validated = await schema.validate(formData, { abortEarly: false });
 
       setIsSubmitting(true);
       const token = localStorage.getItem('token');
 
-      let payload: NewUserForm | ExistingUserForm;
+      let payload: any;
       if (isExisting) {
-        const v = validated as ExistingUserForm;
         payload = {
-          existingUserId: v.existingUserId,  // Changed from existingContactId
-          role: v.role,
-          userGroup: v.userGroup,
-          isActive: v.isActive
+          existingUserId: validated.existingUserId,
+          role: validated.role,
+          isActive: validated.isActive
         };
       } else {
-        const v = validated as NewUserForm;
         payload = {
-          firstName: v.firstName,
-          lastName: v.lastName,
-          email: v.email,
-          confirmEmail: v.confirmEmail,  // Fixed typo
-          phoneNo: v.phoneNo,
-          role: v.role,
-          userGroup: v.userGroup,
-          isActive: v.isActive
+          firstName: validated.firstName,
+          lastName: validated.lastName,
+          email: validated.email,
+          confirmEmail: validated.confirmEmail,
+          phoneNo: validated.phoneNo,
+          role: validated.role,
+          userGroup: validated.userGroup,
+          isActive: validated.isActive
         };
       }
 
-      const companyId = (validated as any).companyId;
       const res = await fetch('/api/auth/users', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ ...payload, companyId })
+        body: JSON.stringify({ ...payload, companyId: validated.companyId })
       });
-      if (!res.ok) throw new Error('Failed to create user');
-      alert('User registered successfully!');
+      
+      const result = await res.json();
+      if (!res.ok) throw new Error(result.message || 'Failed to create user');
+      
+      alert(result.message);
       navigate('/manage-users');
     } catch (err: any) {
       if (err.name === 'ValidationError') {
@@ -190,14 +240,14 @@ const AddUser: React.FC = () => {
   const handleReset = () => {
     setFormData({
       companyId: '',
-      existingUserId: '',  // Changed from existingContactId
+      existingUserId: '',
       firstName: '',
       lastName: '',
       email: '',
       confirmEmail: '',
       phoneNo: '',
       role: '',
-      userGroup: '',
+      userGroup: [],
       isActive: true
     });
     setErrors({});
@@ -215,7 +265,7 @@ const AddUser: React.FC = () => {
               <div className="w-8 h-8 bg-gray-800 rounded-full flex items-center justify-center text-white text-sm font-bold">AU</div>
               <div>
                 <h1 className="text-lg font-semibold text-gray-900">Register User</h1>
-                <p className="text-xs text-gray-600">Add a new user with role and group</p>
+                <p className="text-xs text-gray-600">Add a new user with role and groups</p>
               </div>
             </div>
             <button
@@ -234,17 +284,19 @@ const AddUser: React.FC = () => {
           </div>
 
           <form onSubmit={handleSubmit} className="p-4" noValidate>
-            {/* Row 1: Type, Existing Users */}
+            {/* Row 1: Company, Existing Users */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <label className="block text-xs font-semibold text-gray-700 mb-1">Company: <span className="text-red-600">*</span></label> 
+                <label className="block text-xs font-semibold text-gray-700 mb-1">Company: <span className="text-red-600">*</span></label>
                 <select
                   value={formData.companyId}
                   onChange={(e) => { setFormData({ ...formData, companyId: e.target.value }); clearError('companyId'); }}
                   className="w-full border border-gray-300 rounded px-3 py-2 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-gray-500"
                 >
-                  <option value="">Select</option>
-                  {getCompanyOptions()}
+                  <option value="">Select Company</option>
+                  {companies.map(c => (
+                    <option key={c.id} value={c.id}>{c.name}</option>
+                  ))}
                 </select>
                 {errors.companyId && <p className="text-red-600 text-xs mt-1">{errors.companyId}</p>}
               </div>
@@ -258,126 +310,213 @@ const AddUser: React.FC = () => {
                 >
                   <option value="">Select Existing User</option>
                   {users.map(u => (
-                    <option key={u._id} value={u._id}>  {/* Use _id for both key and value */}
-                      {`${u.firstName} ${u.lastName}`}  {/* Create name from firstName + lastName */}
+                    <option key={u._id || u.id} value={u._id || u.id}>
+                      {`${u.firstName} ${u.lastName}`}
                     </option>
                   ))}
                 </select>
-                {errors.existingUserId && <p className="text-red-600 text-xs mt-1">{errors.existingUserId}</p>}
               </div>
             </div>
 
             {/* Read-only fields for existing user */}
-            {formData.existingUserId && (  // Show only if user selected
-              <>
-                <div className="mt-4">
+            {formData.existingUserId && (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+                <div>
                   <label className="block text-xs font-semibold text-gray-700 mb-1">First Name:</label>
-                  <input
-                    type="text"
-                    value={formData.firstName}
-                    readOnly
-                    className="w-full border border-gray-300 rounded px-3 py-2 bg-gray-100 text-sm"
-                  />
+                  <input type="text" value={formData.firstName} readOnly className="w-full border border-gray-300 rounded px-3 py-2 bg-gray-100 text-sm" />
                 </div>
-                <div className="mt-4">
+                <div>
                   <label className="block text-xs font-semibold text-gray-700 mb-1">Last Name:</label>
-                  <input
-                    type="text"
-                    value={formData.lastName}
-                    readOnly
-                    className="w-full border border-gray-300 rounded px-3 py-2 bg-gray-100 text-sm"
-                  />
+                  <input type="text" value={formData.lastName} readOnly className="w-full border border-gray-300 rounded px-3 py-2 bg-gray-100 text-sm" />
                 </div>
-                <div className="mt-4">
+                <div>
                   <label className="block text-xs font-semibold text-gray-700 mb-1">Email:</label>
-                  <input
-                    type="email"
-                    value={formData.email}
-                    readOnly
-                    className="w-full border border-gray-300 rounded px-3 py-2 bg-gray-100 text-sm"
-                  />
+                  <input type="email" value={formData.email} readOnly className="w-full border border-gray-300 rounded px-3 py-2 bg-gray-100 text-sm" />
                 </div>
-                <div className="mt-4">
+                <div>
                   <label className="block text-xs font-semibold text-gray-700 mb-1">Phone Number:</label>
-                  <input
-                    type="text"
-                    value={formData.phoneNo}
-                    readOnly
-                    className="w-full border border-gray-300 rounded px-3 py-2 bg-gray-100 text-sm"
-                  />
+                  <input type="text" value={formData.phoneNo} readOnly className="w-full border border-gray-300 rounded px-3 py-2 bg-gray-100 text-sm" />
+                </div>
+              </div>
+            )}
+
+            {/* New user fields */}
+            {!formData.existingUserId && (
+              <>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-700 mb-1">First Name <span className="text-red-600">*</span></label>
+                    <input
+                      value={formData.firstName}
+                      onChange={(e) => { setFormData({ ...formData, firstName: e.target.value }); clearError('firstName'); }}
+                      className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-500"
+                      placeholder="First Name"
+                    />
+                    {errors.firstName && <p className="text-red-600 text-xs mt-1">{errors.firstName}</p>}
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-700 mb-1">Last Name <span className="text-red-600">*</span></label>
+                    <input
+                      value={formData.lastName}
+                      onChange={(e) => { setFormData({ ...formData, lastName: e.target.value }); clearError('lastName'); }}
+                      className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-500"
+                      placeholder="Last Name"
+                    />
+                    {errors.lastName && <p className="text-red-600 text-xs mt-1">{errors.lastName}</p>}
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-700 mb-1">Email <span className="text-red-600">*</span></label>
+                    <input
+                      type="email"
+                      value={formData.email}
+                      onChange={(e) => { setFormData({ ...formData, email: e.target.value }); clearError('email'); }}
+                      className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-500"
+                      placeholder="Email"
+                    />
+                    {errors.email && <p className="text-red-600 text-xs mt-1">{errors.email}</p>}
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-700 mb-1">Confirm Email <span className="text-red-600">*</span></label>
+                    <input
+                      type="email"
+                      value={formData.confirmEmail}
+                      onChange={(e) => { setFormData({ ...formData, confirmEmail: e.target.value }); clearError('confirmEmail'); }}
+                      className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-500"
+                      placeholder="Confirm Email"
+                    />
+                    {errors.confirmEmail && <p className="text-red-600 text-xs mt-1">{errors.confirmEmail}</p>}
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-700 mb-1">Phone No <span className="text-red-600">*</span></label>
+                    <input
+                      type="tel"
+                      value={formData.phoneNo}
+                      onChange={(e) => { setFormData({ ...formData, phoneNo: e.target.value }); clearError('phoneNo'); }}
+                      className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-500"
+                      placeholder="10-digit number"
+                    />
+                    {errors.phoneNo && <p className="text-red-600 text-xs mt-1">{errors.phoneNo}</p>}
+                  </div>
+                  {/* User Groups - Dropdown Multi-select */}
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-700 mb-1">User Groups: <span className="text-red-600">*</span></label>
+                    <div className="relative user-group-dropdown">
+                      {/* Main dropdown button */}
+                      <div 
+                        className="w-full border border-gray-300 rounded px-3 py-2 bg-white text-sm min-h-[38px] cursor-pointer flex items-center justify-between"
+                        onClick={() => setShowUserGroupDropdown(!showUserGroupDropdown)}
+                      >
+                        <div className="flex flex-wrap gap-1 flex-1">
+                          {formData.userGroup.length === 0 ? (
+                            <span className="text-gray-400">Select user groups...</span>
+                          ) : (
+                            formData.userGroup.map(group => (
+                              <span key={group} className="bg-blue-100 text-blue-800 px-2 py-1 rounded-sm text-xs flex items-center gap-1">
+                                {group}
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleUserGroupChange(group);
+                                  }}
+                                  className="text-blue-600 hover:text-blue-800 font-bold"
+                                >
+                                  ×
+                                </button>
+                              </span>
+                            ))
+                          )}
+                        </div>
+                        {/* Dropdown arrow */}
+                        <svg 
+                          className={`w-4 h-4 transition-transform ${showUserGroupDropdown ? 'rotate-180' : ''}`} 
+                          fill="none" 
+                          stroke="currentColor" 
+                          viewBox="0 0 24 24"
+                        >
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                        </svg>
+                      </div>
+
+                      {/* Dropdown menu */}
+                      {showUserGroupDropdown && (
+                        <div className="absolute z-50 w-full mt-1 bg-white border border-gray-300 rounded shadow-lg max-h-48 overflow-y-auto">
+                          {/* Search input */}
+                          <div className="p-2 border-b bg-gray-50">
+                            <div className="relative">
+                              <input
+                                type="text"
+                                placeholder="Search groups..."
+                                value={userGroupSearch}
+                                onChange={(e) => setUserGroupSearch(e.target.value)}
+                                className="w-full pl-8 pr-3 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
+                              />
+                              <svg className="absolute left-2 top-1.5 w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                              </svg>
+                            </div>
+                          </div>
+
+                          {/* Select all option */}
+                          <div className="p-2 bg-gray-50 border-b">
+                            <label className="flex items-center cursor-pointer hover:bg-gray-100 p-1 rounded">
+                              <input
+                                type="checkbox"
+                                checked={formData.userGroup.length === filteredUserGroups.length && filteredUserGroups.length > 0}
+                                onChange={(e) => {
+                                  if (e.target.checked) {
+                                    setFormData({ ...formData, userGroup: filteredUserGroups.map(g => g.name) });
+                                  } else {
+                                    setFormData({ ...formData, userGroup: [] });
+                                  }
+                                  clearError('userGroup');
+                                }}
+                                className="mr-2"
+                              />
+                              <span className="text-sm font-semibold">Select all ({filteredUserGroups.length})</span>
+                            </label>
+                          </div>
+
+                          {/* Group options */}
+                          <div className="max-h-32 overflow-y-auto">
+                            {filteredUserGroups.length > 0 ? (
+                              filteredUserGroups.map(g => (
+                                <label key={g.id} className="flex items-center px-3 py-2 hover:bg-gray-50 cursor-pointer border-b border-gray-100 last:border-b-0">
+                                  <input
+                                    type="checkbox"
+                                    checked={formData.userGroup.includes(g.name)}
+                                    onChange={(e) => {
+                                      console.log('Checkbox changed for:', g.name, 'Checked:', e.target.checked);
+                                      handleUserGroupChange(g.name);
+                                    }}
+                                    className="mr-2"
+                                  />
+                                  <span className="text-sm">{g.name}</span>
+                                </label>
+                              ))
+                            ) : (
+                              <div className="px-3 py-2 text-sm text-gray-500">
+                                No groups found {userGroups.length === 0 ? '(Loading...)' : ''}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                    {errors.userGroup && <p className="text-red-600 text-xs mt-1">{errors.userGroup}</p>}
+                  </div>
                 </div>
               </>
             )}
 
-            {/* Row 2: First, Last (hide if existing user selected) */}
-            {!formData.existingUserId && (  // Hide if existing user is selected
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
-                <div>
-                  <label className="block text-xs font-semibold text-gray-700 mb-1">First Name <span className="text-red-600">*</span></label>
-                  <input
-                    value={formData.firstName}
-                    onChange={(e) => { setFormData({ ...formData, firstName: e.target.value }); clearError('firstName'); }}
-                    className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-500"
-                    placeholder="First Name"
-                  />
-                  {errors.firstName && <p className="text-red-600 text-xs mt-1">{errors.firstName}</p>}
-                </div>
-                <div>
-                  <label className="block text-xs font-semibold text-gray-700 mb-1">Last Name <span className="text-red-600">*</span></label>
-                  <input
-                    value={formData.lastName}
-                    onChange={(e) => { setFormData({ ...formData, lastName: e.target.value }); clearError('lastName'); }}
-                    className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-500"
-                    placeholder="Last Name"
-                  />
-                  {errors.lastName && <p className="text-red-600 text-xs mt-1">{errors.lastName}</p>}
-                </div>
-              </div>
-            )}
-
-            {/* Row 3: Email, Confirm Email (hide if existing user selected) */}
-            {!formData.existingUserId && (  // Hide if existing user is selected
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
-                <div>
-                  <label className="block text-xs font-semibold text-gray-700 mb-1">Email <span className="text-red-600">*</span></label>
-                  <input
-                    type="email"
-                    value={formData.email}
-                    onChange={(e) => { setFormData({ ...formData, email: e.target.value }); clearError('email'); }}
-                    className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-500"
-                    placeholder="Email"
-                  />
-                  {errors.email && <p className="text-red-600 text-xs mt-1">{errors.email}</p>}
-                </div>
-                <div>
-                  <label className="block text-xs font-semibold text-gray-700 mb-1">Confirm Email <span className="text-red-600">*</span></label>
-                  <input
-                    type="email"
-                    value={formData.confirmEmail}
-                    onChange={(e) => { setFormData({ ...formData, confirmEmail: e.target.value }); clearError('confirmEmail'); }}
-                    className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-500"
-                    placeholder="Confirm Email"
-                  />
-                  {errors.confirmEmail && <p className="text-red-600 text-xs mt-1">{errors.confirmEmail}</p>}
-                </div>
-              </div>
-            )}
-
-            {/* Row 4: Phone, Role */}
+            {/* Role and Status */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
-              {!formData.existingUserId && (  // Hide phone if existing user selected
-                <div>
-                  <label className="block text-xs font-semibold text-gray-700 mb-1">Phone No <span className="text-red-600">*</span></label>
-                  <input
-                    type="tel"
-                    value={formData.phoneNo}
-                    onChange={(e) => { setFormData({ ...formData, phoneNo: e.target.value }); clearError('phoneNo'); }}
-                    className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-500"
-                    placeholder="10-digit number"
-                  />
-                  {errors.phoneNo && <p className="text-red-600 text-xs mt-1">{errors.phoneNo}</p>}
-                </div>
-              )}
               <div>
                 <label className="block text-xs font-semibold text-gray-700 mb-1">Role: <span className="text-red-600">*</span></label>
                 <select
@@ -385,29 +524,12 @@ const AddUser: React.FC = () => {
                   onChange={(e) => { setFormData({ ...formData, role: e.target.value }); clearError('role'); }}
                   className="w-full border border-gray-300 rounded px-3 py-2 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-gray-500"
                 >
-                  <option value="">Select</option>
-                  <option value="admin">System Administrator</option>
-                  <option value="manager">Department Manager</option>
-                  <option value="executive">Executive User</option>
-                  <option value="user">Standard User</option>
+                  <option value="">Select Role</option>
+                  {roles.map(r => (
+                    <option key={r.id} value={r.name}>{r.name}</option>
+                  ))}
                 </select>
                 {errors.role && <p className="text-red-600 text-xs mt-1">{errors.role}</p>}
-              </div>
-            </div>
-
-            {/* Row 5: User Group, Active */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
-              <div>
-                <label className="block text-xs font-semibold text-gray-700 mb-1">User Group: <span className="text-red-600">*</span></label>
-                <select
-                  value={formData.userGroup}
-                  onChange={(e) => { setFormData({ ...formData, userGroup: e.target.value }); clearError('userGroup'); }}
-                  className="w-full border border-gray-300 rounded px-3 py-2 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-gray-500"
-                >
-                  <option value="">None Selected</option>
-                  {USER_GROUPS.map(g => <option key={g.id} value={g.name}>{g.name}</option>)}
-                </select>
-                {errors.userGroup && <p className="text-red-600 text-xs mt-1">{errors.userGroup}</p>}
               </div>
               <div>
                 <label className="block text-xs font-semibold text-gray-700 mb-1">Activation Status: <span className="text-red-600">*</span></label>
