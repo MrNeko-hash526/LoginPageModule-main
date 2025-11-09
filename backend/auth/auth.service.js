@@ -351,6 +351,35 @@ async function setPassword(email, token, newPassword) {
   return { success: true, message: 'Password updated successfully' };
 }
 
+// Add forgot password function - Updated: Store plain token in otp
+async function forgotPassword(email) {
+  // Check if user exists in users table
+  const user = await query('SELECT user_id FROM users WHERE email = ? AND bit_deleted_flag = 0', [email]);
+  if (!user[0]) {
+    throw new Error('User not found');
+  }
+
+  const userId = user[0].user_id;
+
+  // Generate secure token
+  const resetToken = crypto.randomBytes(32).toString('hex');
+
+  // Store plain token in login_activity with mail_time
+  await query('INSERT INTO login_activity (user_id, otp, mail_time) VALUES (?, ?, NOW())', [userId, resetToken]);
+
+  // Send reset email
+  const resetLink = `${process.env.FRONTEND_URL}/reset-password?token=${resetToken}&email=${encodeURIComponent(email)}`;
+  await sendResetEmail(email, resetToken);
+
+  return { success: true, message: 'Reset email sent.' };
+}
+
+// Get companies
+async function getCompanies() {
+  const rows = await query('SELECT company_id AS id, company_name AS name, parent_company_id AS parentId FROM companies');
+  return rows;
+}
+
 module.exports = { 
   login, 
   findUserByEmail, 
@@ -365,5 +394,7 @@ module.exports = {
   assignRole,
   removeRole,
   getCompaniesForEmail,  // Added
-  setPassword  // Added
+  setPassword,  // Added
+  forgotPassword,  // Add this
+  getCompanies // Add this
 };

@@ -1,7 +1,7 @@
 const { 
   createUser,
   getUserGroups,
-  getContacts,
+  getUsers,  // Changed from getContacts
   getCompanies
 } = require('./add.service'); // Updated to import from add.service.js
 
@@ -27,13 +27,13 @@ const getUserGroupsController = async (req, res) => {
   }
 };
 
-// Get contacts
-const getContactsController = async (req, res) => {
+// Get existing users (changed from getContacts)
+const getUsersController = async (req, res) => {
   try {
-    const contacts = await getContacts();
-    res.json({ contacts });
+    const users = await getUsers();  // Changed from getContacts
+    res.json({ users });  // Changed from { contacts }
   } catch (error) {
-    console.error('Error fetching contacts:', error);
+    console.error('Error fetching users:', error);
     res.status(500).json({ success: false, message: error.message });
   }
 };
@@ -49,9 +49,9 @@ const getCompaniesController = async (req, res) => {
   }
 };
 
-module.exports = { 
+module.exports = {
   createUser: createUserController,
   getUserGroups: getUserGroupsController,
-  getContacts: getContactsController,
+  getUsers: getUsersController,  // Changed from getContacts
   getCompanies: getCompaniesController
 };

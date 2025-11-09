@@ -135,7 +135,7 @@ const CompanySelector: React.FC<CompanySelectorProps> = ({
 
         {/* Main Card with Scrollable Content */}
         <div className={`
-          bg-white rounded-3xl shadow-2xl shadow-black/20 transition-all duration-300
+          bg-gray-800 rounded-3xl shadow-2xl shadow-black/20 transition-all duration-300
           animate-in slide-in-from-bottom-4 duration-700 delay-500 ease-out
           ${isLoading ? 'animate-pulse scale-[0.98] shadow-blue-500/20' : 'hover:shadow-3xl'}
           flex flex-col
@@ -144,16 +144,16 @@ const CompanySelector: React.FC<CompanySelectorProps> = ({
           <div className="flex-1 overflow-y-auto p-6">
             {/* Error Display */}
             {error && (
-              <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-2xl animate-in slide-in-from-top-2 duration-300 ease-out">
+              <div className="mb-6 p-4 bg-red-900/50 border border-red-700 rounded-2xl animate-in slide-in-from-top-2 duration-300 ease-out">
                 <div className="flex items-start gap-3">
                   <div className="flex-shrink-0">
-                    <div className="w-8 h-8 bg-red-100 rounded-full flex items-center justify-center">
-                      <AlertCircle className="w-4 h-4 text-red-600" />
+                    <div className="w-8 h-8 bg-red-800 rounded-full flex items-center justify-center">
+                      <AlertCircle className="w-4 h-4 text-red-400" />
                     </div>
                   </div>
                   <div>
-                    <h3 className="text-sm font-semibold text-red-800">Selection Failed</h3>
-                    <p className="text-sm text-red-700 mt-1">{error}</p>
+                    <h3 className="text-sm font-semibold text-red-300">Selection Failed</h3>
+                    <p className="text-sm text-red-400 mt-1">{error}</p>
                   </div>
                 </div>
               </div>
@@ -163,7 +163,7 @@ const CompanySelector: React.FC<CompanySelectorProps> = ({
               {/* Company Selection */}
               {availableCompanies.length > 1 ? (
                 <div className="animate-in slide-in-from-bottom-2 duration-500 delay-600 ease-out">
-                  <label className="block text-sm font-bold text-slate-900 uppercase tracking-wide mb-3">
+                  <label className="block text-sm font-bold text-gray-300 uppercase tracking-wide mb-3">
                     Select Organization
                   </label>
                   <div className="space-y-3">
@@ -173,8 +173,8 @@ const CompanySelector: React.FC<CompanySelectorProps> = ({
                         className={`
                           p-4 border-2 rounded-2xl cursor-pointer transition-all duration-200
                           ${selectedCompany?.id === company.id
-                            ? 'border-blue-500 bg-blue-50 shadow-lg shadow-blue-500/20'
-                            : 'border-slate-200 hover:border-slate-300 bg-slate-50 hover:bg-white'
+                            ? 'border-blue-500 bg-gray-700 shadow-lg shadow-blue-500/20'
+                            : 'border-gray-600 hover:border-gray-500 bg-gray-700 hover:bg-gray-600'
                           }
                           ${isLoading ? 'cursor-not-allowed opacity-75' : ''}
                         `}
@@ -183,16 +183,16 @@ const CompanySelector: React.FC<CompanySelectorProps> = ({
                         <div className="flex items-center gap-3">
                           <div className={`
                             w-10 h-10 rounded-xl flex items-center justify-center
-                            ${company.code === 'AACA' ? 'bg-red-100' : 'bg-blue-100'}  // Fixed: Use code (string) instead of id (number)
+                            ${company.code === 'AACA' ? 'bg-red-800' : 'bg-blue-800'}
                           `}>
                             <Building className={`
                               w-5 h-5 
-                              ${company.code === 'AACA' ? 'text-red-600' : 'text-blue-600'}  // Fixed: Use code
+                              ${company.code === 'AACA' ? 'text-red-400' : 'text-blue-400'}
                             `} />
                           </div>
                           <div>
-                            <h3 className="font-semibold text-slate-900">{company.name}</h3>
-                            <p className="text-sm text-slate-600">{company.code}</p>
+                            <h3 className="font-semibold text-white">{company.name}</h3>
+                            <p className="text-sm text-gray-400">{company.code}</p>
                           </div>
                         </div>
                       </div>
@@ -202,14 +202,14 @@ const CompanySelector: React.FC<CompanySelectorProps> = ({
               ) : (
                 /* Single Company Display */
                 selectedCompany && (
-                  <div className="p-4 bg-blue-50 border border-blue-200 rounded-2xl animate-in slide-in-from-bottom-2 duration-500 delay-600 ease-out">
+                  <div className="p-4 bg-gray-700 border border-gray-600 rounded-2xl animate-in slide-in-from-bottom-2 duration-500 delay-600 ease-out">
                     <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 bg-blue-100 rounded-xl flex items-center justify-center">
-                        <Building className="w-5 h-5 text-blue-600" />
+                      <div className="w-10 h-10 bg-blue-800 rounded-xl flex items-center justify-center">
+                        <Building className="w-5 h-5 text-blue-400" />
                       </div>
                       <div>
-                        <h3 className="font-semibold text-slate-900">{selectedCompany.name}</h3>
-                        <p className="text-sm text-slate-600">{selectedCompany.code}</p>
+                        <h3 className="font-semibold text-white">{selectedCompany.name}</h3>
+                        <p className="text-sm text-gray-400">{selectedCompany.code}</p>
                       </div>
                     </div>
                   </div>
@@ -219,7 +219,7 @@ const CompanySelector: React.FC<CompanySelectorProps> = ({
               {/* Role Selection */}
               {selectedCompany && (
                 <div className="animate-in slide-in-from-bottom-2 duration-500 delay-700 ease-out">
-                  <label className="block text-sm font-bold text-slate-900 uppercase tracking-wide mb-3">
+                  <label className="block text-sm font-bold text-gray-300 uppercase tracking-wide mb-3">
                     Select Role
                     {loadingRoles && (
                       <div className="w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin ml-2 inline-block" />
@@ -227,7 +227,7 @@ const CompanySelector: React.FC<CompanySelectorProps> = ({
                   </label>
                   
                   {loadingRoles ? (
-                    <div className="p-4 text-center text-slate-500">Loading roles...</div>
+                    <div className="p-4 text-center text-gray-400">Loading roles...</div>
                   ) : availableRoles.length > 1 ? (
                     <select
                       value={selectedRole?.id || ''}
@@ -236,55 +236,55 @@ const CompanySelector: React.FC<CompanySelectorProps> = ({
                         const role = availableRoles.find(r => r.id === roleId);
                         setSelectedRole(role || null);
                       }}
-                      className="w-full h-12 px-4 border-2 border-slate-200 rounded-2xl bg-slate-50 transition-all duration-200 text-slate-900 font-medium focus:outline-none focus:ring-0 focus:border-blue-500 focus:bg-white disabled:opacity-75 disabled:cursor-not-allowed"
+                      className="w-full h-12 px-4 border-2 border-gray-600 rounded-2xl bg-gray-700 transition-all duration-200 text-white placeholder-gray-400 font-medium focus:outline-none focus:ring-0 focus:border-blue-500 focus:bg-gray-600 disabled:opacity-75 disabled:cursor-not-allowed"
                       disabled={isLoading}
                     >
-                      <option value="">Choose your role...</option>
+                      <option value="" className="bg-gray-700 text-white">Choose your role...</option>
                       {availableRoles.map((role) => (
-                        <option key={role.id} value={role.id}>
+                        <option key={role.id} value={role.id} className="bg-gray-700 text-white">
                           {role.name} - {role.description}
                         </option>
                       ))}
                     </select>
                   ) : availableRoles.length === 1 ? (
                     /* Single Role Display */
-                    <div className="p-4 bg-green-50 border border-green-200 rounded-2xl">
+                    <div className="p-4 bg-gray-700 border border-gray-600 rounded-2xl">
                       <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 bg-green-100 rounded-xl flex items-center justify-center">
+                        <div className="w-10 h-10 bg-green-800 rounded-xl flex items-center justify-center">
                           {getRoleIcon(availableRoles[0].code)}
                         </div>
                         <div>
-                          <h3 className="font-semibold text-slate-900">{availableRoles[0].name}</h3>
-                          <p className="text-sm text-slate-600">{availableRoles[0].description}</p>
+                          <h3 className="font-semibold text-white">{availableRoles[0].name}</h3>
+                          <p className="text-sm text-gray-400">{availableRoles[0].description}</p>
                         </div>
                       </div>
                     </div>
                   ) : (
                     /* No Roles Available */
-                    <div className="p-4 bg-red-50 border border-red-200 rounded-2xl text-center">
-                      <p className="text-red-700">No roles available for this organization.</p>
+                    <div className="p-4 bg-red-900/50 border border-red-700 rounded-2xl text-center">
+                      <p className="text-red-400">No roles available for this organization.</p>
                     </div>
                   )}
 
                   {/* Selected Role Summary */}
                   {selectedRole && (
-                    <div className="mt-4 p-4 bg-blue-50 border border-blue-200 rounded-2xl animate-in slide-in-from-bottom-1 duration-400 delay-800 ease-out">
+                    <div className="mt-4 p-4 bg-gray-700 border border-gray-600 rounded-2xl animate-in slide-in-from-bottom-1 duration-400 delay-800 ease-out">
                       <div className="flex items-center gap-2 mb-2">
-                        <Shield className="h-4 w-4 text-blue-600" />
-                        <span className="font-semibold text-sm">Access Summary</span>
+                        <Shield className="h-4 w-4 text-blue-400" />
+                        <span className="font-semibold text-sm text-gray-300">Access Summary</span>
                       </div>
                       <div className="space-y-1 text-sm">
                         <div className="flex justify-between">
-                          <span className="text-slate-600">Organization:</span>
-                          <span className="font-medium">{selectedCompany.name}</span>
+                          <span className="text-gray-400">Organization:</span>
+                          <span className="font-medium text-white">{selectedCompany.name}</span>
                         </div>
                         <div className="flex justify-between">
-                          <span className="text-slate-600">Role:</span>
-                          <span className="font-medium">{selectedRole.name}</span>
+                          <span className="text-gray-400">Role:</span>
+                          <span className="font-medium text-white">{selectedRole.name}</span>
                         </div>
                         <div className="flex justify-between">
-                          <span className="text-slate-600">Access Level:</span>
-                          <span className="font-medium">{selectedRole.code}</span>
+                          <span className="text-gray-400">Access Level:</span>
+                          <span className="font-medium text-white">{selectedRole.code}</span>
                         </div>
                       </div>
                     </div>
@@ -295,13 +295,13 @@ const CompanySelector: React.FC<CompanySelectorProps> = ({
           </div>
 
           {/* Fixed Action Buttons at Bottom */}
-          <div className="flex-shrink-0 border-t border-slate-200 p-6 bg-white rounded-b-3xl">
+          <div className="flex-shrink-0 border-t border-gray-600 p-6 bg-gray-800 rounded-b-3xl">
             <div className="flex gap-4 animate-in slide-in-from-bottom-2 duration-500 delay-900 ease-out">
               <button
                 type="button"
                 onClick={onBack}
                 disabled={isLoading}
-                className="flex-1 h-12 px-6 border-2 border-slate-300 rounded-2xl font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 transition-all duration-200"
+                className="flex-1 h-12 px-6 border-2 border-gray-600 rounded-2xl font-semibold text-gray-300 hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 transition-all duration-200"
               >
                 <ArrowLeft className="w-4 h-4" />
                 Back

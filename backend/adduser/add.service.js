@@ -5,20 +5,41 @@ const nodemailer = require('nodemailer');
 
 const JWT_SECRET = process.env.JWT_SECRET || 'change_me';
 
-// Create user (new or from existing contact) - Updated: pass_exp_date not set here (will be set on password creation)
+// Get user groups
+async function getUserGroups() {
+  const rows = await query('SELECT id, name FROM user_groups'); // Assuming user_groups table exists
+  return rows;
+}
+
+// Get existing users
+async function getUsers() {
+  const rows = await query(`
+    SELECT user_id AS id, CONCAT(first_name, ' ', last_name) AS name, email, first_name, last_name, phone_no
+    FROM users 
+    WHERE bit_deleted_flag = 0
+  `);
+  return rows;
+}
+
+// Get companies
+async function getCompanies() {
+  const rows = await query('SELECT company_id AS id, company_name AS name, parent_company_id AS parentId FROM companies');
+  return rows;
+}
+
+// Create user (new or from existing user) - Updated: Use existingUserId
 async function createUser(payload) {
-  const { companyId, existingContactId, firstName, lastName, email, phoneNo, role, userGroup, isActive } = payload;
+  const { companyId, existingUserId, firstName, lastName, email, phoneNo, role, userGroup, isActive } = payload;
 
   let userData;
-  if (existingContactId) {
-    const contact = await query('SELECT name, email, phone FROM contacts WHERE id = ?', [existingContactId]);
-    if (!contact[0]) throw new Error('Contact not found');
-    const [fName, lName] = contact[0].name.split(' ');
+  if (existingUserId) {
+    const user = await query('SELECT first_name, last_name, email, phone_no FROM users WHERE user_id = ? AND bit_deleted_flag = 0', [existingUserId]);
+    if (!user[0]) throw new Error('User not found');
     userData = {
-      first_name: fName || '',
-      last_name: lName || '',
-      email: contact[0].email,
-      phone_no: contact[0].phone,
+      first_name: user[0].first_name,
+      last_name: user[0].last_name,
+      email: user[0].email,
+      phone_no: user[0].phone_no,
       user_group: userGroup,
       active_inactive_status: isActive ? 1 : 0
     };
@@ -33,6 +54,9 @@ async function createUser(payload) {
     };
   }
 
+  // Store userGroup as JSON string in users.user_group
+  userData.user_group = JSON.stringify(payload.userGroup);  // Array of names
+
   // Insert into users
   const result = await query('INSERT INTO users SET ?', [userData]);
   const userId = result.insertId;
@@ -45,15 +69,14 @@ async function createUser(payload) {
   // Insert into user_roles
   await query('INSERT INTO user_roles (user_id, company_id, role_id, bit_deleted_flag) VALUES (?, ?, ?, 0)', [userId, companyId, roleId]);
 
-  // Generate secure token using crypto
-  const resetToken = crypto.randomBytes(32).toString('hex');  // 64-char hex token
-  const hashedToken = crypto.createHash('sha256').update(resetToken).digest('hex');  // SHA-256 hash (64 chars)
+  // Generate secure token using crypto (random bytes)
+  const resetToken = crypto.randomBytes(32).toString('hex');  // 64-char hex token (random)
 
-  // Store hash in login_activity.otp, set mail_time to now (use for 24h expiry check)
-  await query('INSERT INTO login_activity (user_id, otp, mail_time) VALUES (?, ?, NOW())', [userId, hashedToken]);
-  // pass_exp_date remains NULL until password is set
+  // Store plain token in login_activity.otp (no hashing)
+  await query('INSERT INTO login_activity (user_id, otp, mail_time) VALUES (?, ?, NOW())', [userId, resetToken]);
 
-  // Send reset email with plain token
+  // Send reset email with plain token in link
+  const resetLink = `${process.env.FRONTEND_URL}/reset-password?token=${resetToken}&email=${encodeURIComponent(email)}`;
   await sendResetEmail(email, resetToken);
 
   return { success: true, message: 'User created successfully. Reset email sent.' };
@@ -82,27 +105,35 @@ async function sendResetEmail(email, token) {
   await transporter.sendMail(mailOptions);
 }
 
-// Get user groups
-async function getUserGroups() {
-  const rows = await query('SELECT id, name FROM user_groups'); // Assuming user_groups table exists
-  return rows;
-}
+// Set new password after token verification - Updated: No hashing, match plain token
+async function setPassword(email, token, newPassword) {
+  // Find user by email, matching plain token in login_activity, and otp not expired (within 24 hours)
+  const user = await query(`
+    SELECT u.user_id 
+    FROM users u 
+    JOIN login_activity la ON u.user_id = la.user_id 
+    WHERE u.email = ? AND la.otp = ? AND la.mail_time > DATE_SUB(NOW(), INTERVAL 24 HOUR)
+  `, [email, token]);  // Use plain token directly
 
-// Get existing contacts
-async function getContacts() {
-  const rows = await query('SELECT id, name, email FROM contacts'); // Assuming contacts table exists
-  return rows;
-}
+  if (!user[0]) {
+    throw new Error('Invalid or expired token');
+  }
 
-// Get companies
-async function getCompanies() {
-  const rows = await query('SELECT company_id AS id, company_name AS name, parent_company_id AS parentId FROM companies');
-  return rows;
+  // Hash the new password
+  const hashedPassword = await bcrypt.hash(newPassword, 12);
+
+  // Update password, set pass_exp_date to 6 months from now, and remove the login_activity entry
+  const passwordExpiry = new Date(Date.now() + 6 * 30 * 24 * 60 * 60 * 1000);  // Approx 6 months
+  await query('UPDATE users SET password_hash = ?, pass_exp_date = ? WHERE user_id = ?', [hashedPassword, passwordExpiry, user[0].user_id]);
+  await query('DELETE FROM login_activity WHERE user_id = ? AND otp = ?', [user[0].user_id, token]);  // Use plain token
+
+  return { success: true, message: 'Password updated successfully' };
 }
 
 module.exports = { 
-  createUser,
+  createUser,  // Export the function, not controller
   getUserGroups,
-  getContacts,
-  getCompanies
+  getUsers,  // Export the function
+  getCompanies,
+  setPassword  // Add this back
 };

@@ -4,11 +4,13 @@ const router = express.Router();
 
 const authRoutes = require('./auth/auth.routes');
 const manageuserRoutes = require('./manageuser/manageuser.route');
+const adduserRoutes = require('./adduser/add.route');  // Import adduser routes
 
-router.use('/auth', authRoutes);
-router.use('/auth', manageuserRoutes);
+router.use('/auth', authRoutes);  // Auth routes (login, etc.)
+router.use('/auth', manageuserRoutes);  // Manage user routes
+router.use('/auth', adduserRoutes);  // Add user routes (users, companies, etc.)
 
-// Add global error handler for the router (catches unhandled errors)
+// Global error handler for the router (catches unhandled errors)
 router.use((err, req, res, next) => {
   console.error('Router error:', err);
   res.status(500).json({ success: false, message: 'Internal server error' });

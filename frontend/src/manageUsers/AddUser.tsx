@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import * as yup from 'yup';
 
 interface UserGroup { id: string; name: string; }
-interface Contact { id: string; name: string; email: string; }
+interface User { id: string; name: string; email: string; firstName: string; lastName: string; phoneNo: string; }  // Changed from Contact
 interface Company { id: string; name: string; parentId?: string; }
 
 interface NewUserForm {
@@ -11,20 +11,34 @@ interface NewUserForm {
   phoneNo?: string; role: string; userGroup?: string; isActive: boolean;
 }
 interface ExistingUserForm {
-  existingContactId: string; role: string; userGroup?: string; isActive: boolean;
+  existingUserId: string; role: string; userGroup?: string; isActive: boolean;  // Changed from existingContactId
 }
+
+// Define user groups as a constant array (or enum)
+const USER_GROUPS = [
+  { id: '1', name: 'Admin Group' },
+  { id: '2', name: 'Sales Team' },
+  { id: '3', name: 'IT Department' }
+];
+
+// If you prefer an enum for type safety:
+// enum UserGroupEnum {
+//   AdminGroup = 'Admin Group',
+//   SalesTeam = 'Sales Team',
+//   ITDepartment = 'IT Department'
+// }
+// const USER_GROUPS = Object.values(UserGroupEnum).map((name, index) => ({ id: (index + 1).toString(), name }));
 
 const AddUser: React.FC = () => {
   const navigate = useNavigate();
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [userGroups, setUserGroups] = useState<UserGroup[]>([]);
-  const [existingContacts, setExistingContacts] = useState<Contact[]>([]);
+  const [users, setUsers] = useState<User[]>([]);  // Changed from existingContacts
   const [companies, setCompanies] = useState<Company[]>([]);
   const [errors, setErrors] = useState<{ [key: string]: string }>({});
 
   const [formData, setFormData] = useState({
     companyId: '',
-    existingContactId: '',
+    existingUserId: '',  // Changed from existingContactId
     firstName: '',
     lastName: '',
     email: '',
@@ -36,23 +50,20 @@ const AddUser: React.FC = () => {
   });
 
   useEffect(() => {
-    fetchUserGroups();
-    fetchExistingContacts();
+    const token = localStorage.getItem('token');
+    if (!token) {
+      navigate('/login');
+      return;
+    }
+    fetchUsers();  // Changed from fetchExistingContacts
     fetchCompanies();
-  }, []);
+  }, [navigate]);
 
-  const fetchUserGroups = async () => {
+  const fetchUsers = async () => {  // Changed from fetchExistingContacts
     try {
       const token = localStorage.getItem('token');
-      const res = await fetch('/api/auth/user-groups', { headers: { Authorization: `Bearer ${token}` } });
-      if (res.ok) setUserGroups((await res.json()).userGroups || []);
-    } catch {}
-  };
-  const fetchExistingContacts = async () => {
-    try {
-      const token = localStorage.getItem('token');
-      const res = await fetch('/api/auth/contacts', { headers: { Authorization: `Bearer ${token}` } });
-      if (res.ok) setExistingContacts((await res.json()).contacts || []);
+      const res = await fetch('/api/auth/users', { headers: { Authorization: `Bearer ${token}` } });  // Changed to /users
+      if (res.ok) setUsers((await res.json()).users || []);  // Changed to users
     } catch {}
   };
   const fetchCompanies = async () => {
@@ -63,21 +74,26 @@ const AddUser: React.FC = () => {
     } catch {}
   };
 
-  const getCompanyOptions = () => {
-    const parent = companies.filter(c => !c.parentId);
-    const subs = companies.filter(c => c.parentId);
-    const out: React.ReactElement[] = [];
-    parent.forEach(p => {
-      out.push(<option key={p.id} value={p.id}>{p.name}</option>);
-      subs.filter(s => s.parentId === p.id).forEach(s => {
-        out.push(<option key={s.id} value={s.id}>&nbsp;&nbsp;└─ {s.name}</option>);
+  const handleExistingUserChange = (userId: string) => {  // New function
+    const selectedUser = users.find(u => u.id === userId);
+    if (selectedUser) {
+      setFormData({
+        ...formData,
+        existingUserId: userId,  // Changed from existingContactId
+        firstName: selectedUser.firstName,
+        lastName: selectedUser.lastName,
+        email: selectedUser.email,
+        phoneNo: selectedUser.phoneNo
       });
-    });
-    return out;
+    }
+  };
+
+  const getCompanyOptions = () => {
+    return companies.map(c => <option key={c.id} value={c.id}>{c.name}</option>);
   };
 
   const newUserSchema = yup.object().shape({
-    companyId: yup.string().required('Type is required'),
+    companyId: yup.string().required('Company is required'),  // Updated message
     firstName: yup.string().required('First name is required'),
     lastName: yup.string().required('Last name is required'),
     email: yup.string().email('Invalid email').required('Email is required'),
@@ -88,8 +104,8 @@ const AddUser: React.FC = () => {
     isActive: yup.boolean().oneOf([true], 'Must be active')
   });
   const existingUserSchema = yup.object().shape({
-    companyId: yup.string().required('Type is required'),
-    existingContactId: yup.string().required('Existing contact is required'),
+    companyId: yup.string().required('Company is required'),  // Updated message
+    existingUserId: yup.string().required('Existing user is required'),  // Changed from existingContactId
     role: yup.string().required('Role is required'),
     userGroup: yup.string().required('User group is required'),
     isActive: yup.boolean().oneOf([true], 'Must be active')
@@ -99,7 +115,7 @@ const AddUser: React.FC = () => {
     e.preventDefault();
     setErrors({});
     try {
-      const isExisting = formData.existingContactId.trim() !== '';
+      const isExisting = formData.existingUserId.trim() !== '';  // Changed from existingContactId
       const schema = isExisting ? existingUserSchema : newUserSchema;
       const validated = await schema.validate(formData, { abortEarly: false });
 
@@ -110,7 +126,7 @@ const AddUser: React.FC = () => {
       if (isExisting) {
         const v = validated as ExistingUserForm;
         payload = {
-          existingContactId: v.existingContactId,
+          existingUserId: v.existingUserId,  // Changed from existingContactId
           role: v.role,
           userGroup: v.userGroup,
           isActive: v.isActive
@@ -121,7 +137,7 @@ const AddUser: React.FC = () => {
           firstName: v.firstName,
           lastName: v.lastName,
           email: v.email,
-          confirmEmail: v.confirmEmail,
+          confirmEmail: v.confirmEmail,  // Fixed typo
           phoneNo: v.phoneNo,
           role: v.role,
           userGroup: v.userGroup,
@@ -154,7 +170,7 @@ const AddUser: React.FC = () => {
   const handleReset = () => {
     setFormData({
       companyId: '',
-      existingContactId: '',
+      existingUserId: '',  // Changed from existingContactId
       firstName: '',
       lastName: '',
       email: '',
@@ -198,10 +214,10 @@ const AddUser: React.FC = () => {
           </div>
 
           <form onSubmit={handleSubmit} className="p-4" noValidate>
-            {/* Row 1: Type, Existing Contacts */}
+            {/* Row 1: Type, Existing Users */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <label className="block text-xs font-semibold text-gray-700 mb-1">Type: <span className="text-red-600">*</span></label>
+                <label className="block text-xs font-semibold text-gray-700 mb-1">Company: <span className="text-red-600">*</span></label> 
                 <select
                   value={formData.companyId}
                   onChange={(e) => { setFormData({ ...formData, companyId: e.target.value }); clearError('companyId'); }}
@@ -214,84 +230,132 @@ const AddUser: React.FC = () => {
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-gray-700 mb-1">Existing Contacts:</label>
+                <label className="block text-xs font-semibold text-gray-700 mb-1">Existing Users:</label>  // Changed label
                 <select
-                  value={formData.existingContactId}
-                  onChange={(e) => { setFormData({ ...formData, existingContactId: e.target.value }); clearError('existingContactId'); }}
+                  value={formData.existingUserId}  // Changed from existingContactId
+                  onChange={(e) => handleExistingUserChange(e.target.value)}  // Use new function
                   className="w-full border border-gray-300 rounded px-3 py-2 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-gray-500"
                 >
-                  <option value="">Select Existing Contact</option>
-                  {existingContacts.map(c => (
-                    <option key={c.id} value={c.id}>{c.name} - {c.email}</option>
+                  <option value="">Select Existing User</option>
+                  {users.map(u => (  // Changed from existingContacts
+                    <option key={u.id} value={u.id}>{u.name} - {u.email}</option>
                   ))}
                 </select>
-                {errors.existingContactId && <p className="text-red-600 text-xs mt-1">{errors.existingContactId}</p>}
+                {errors.existingUserId && <p className="text-red-600 text-xs mt-1">{errors.existingUserId}</p>}  // Changed from existingContactId
               </div>
             </div>
 
-            {/* Row 2: First, Last */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
-              <div>
-                <label className="block text-xs font-semibold text-gray-700 mb-1">First Name <span className="text-red-600">*</span></label>
-                <input
-                  value={formData.firstName}
-                  onChange={(e) => { setFormData({ ...formData, firstName: e.target.value }); clearError('firstName'); }}
-                  className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-500"
-                  placeholder="First Name"
-                />
-                {errors.firstName && <p className="text-red-600 text-xs mt-1">{errors.firstName}</p>}
-              </div>
-              <div>
-                <label className="block text-xs font-semibold text-gray-700 mb-1">Last Name <span className="text-red-600">*</span></label>
-                <input
-                  value={formData.lastName}
-                  onChange={(e) => { setFormData({ ...formData, lastName: e.target.value }); clearError('lastName'); }}
-                  className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-500"
-                  placeholder="Last Name"
-                />
-                {errors.lastName && <p className="text-red-600 text-xs mt-1">{errors.lastName}</p>}
-              </div>
-            </div>
+            {/* Read-only fields for existing user */}
+            {formData.existingUserId && (  // Show only if user selected
+              <>
+                <div className="mt-4">
+                  <label className="block text-xs font-semibold text-gray-700 mb-1">First Name:</label>
+                  <input
+                    type="text"
+                    value={formData.firstName}
+                    readOnly
+                    className="w-full border border-gray-300 rounded px-3 py-2 bg-gray-100 text-sm"
+                  />
+                </div>
+                <div className="mt-4">
+                  <label className="block text-xs font-semibold text-gray-700 mb-1">Last Name:</label>
+                  <input
+                    type="text"
+                    value={formData.lastName}
+                    readOnly
+                    className="w-full border border-gray-300 rounded px-3 py-2 bg-gray-100 text-sm"
+                  />
+                </div>
+                <div className="mt-4">
+                  <label className="block text-xs font-semibold text-gray-700 mb-1">Email:</label>
+                  <input
+                    type="email"
+                    value={formData.email}
+                    readOnly
+                    className="w-full border border-gray-300 rounded px-3 py-2 bg-gray-100 text-sm"
+                  />
+                </div>
+                <div className="mt-4">
+                  <label className="block text-xs font-semibold text-gray-700 mb-1">Phone Number:</label>
+                  <input
+                    type="text"
+                    value={formData.phoneNo}
+                    readOnly
+                    className="w-full border border-gray-300 rounded px-3 py-2 bg-gray-100 text-sm"
+                  />
+                </div>
+              </>
+            )}
 
-            {/* Row 3: Email, Confirm Email */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
-              <div>
-                <label className="block text-xs font-semibold text-gray-700 mb-1">Email <span className="text-red-600">*</span></label>
-                <input
-                  type="email"
-                  value={formData.email}
-                  onChange={(e) => { setFormData({ ...formData, email: e.target.value }); clearError('email'); }}
-                  className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-500"
-                  placeholder="Email"
-                />
-                {errors.email && <p className="text-red-600 text-xs mt-1">{errors.email}</p>}
+            {/* Row 2: First, Last (hide if existing user selected) */}
+            {!formData.existingUserId && (  // Hide if existing user is selected
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+                <div>
+                  <label className="block text-xs font-semibold text-gray-700 mb-1">First Name <span className="text-red-600">*</span></label>
+                  <input
+                    value={formData.firstName}
+                    onChange={(e) => { setFormData({ ...formData, firstName: e.target.value }); clearError('firstName'); }}
+                    className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-500"
+                    placeholder="First Name"
+                  />
+                  {errors.firstName && <p className="text-red-600 text-xs mt-1">{errors.firstName}</p>}
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-gray-700 mb-1">Last Name <span className="text-red-600">*</span></label>
+                  <input
+                    value={formData.lastName}
+                    onChange={(e) => { setFormData({ ...formData, lastName: e.target.value }); clearError('lastName'); }}
+                    className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-500"
+                    placeholder="Last Name"
+                  />
+                  {errors.lastName && <p className="text-red-600 text-xs mt-1">{errors.lastName}</p>}
+                </div>
               </div>
-              <div>
-                <label className="block text-xs font-semibold text-gray-700 mb-1">Confirm Email <span className="text-red-600">*</span></label>
-                <input
-                  type="email"
-                  value={formData.confirmEmail}
-                  onChange={(e) => { setFormData({ ...formData, confirmEmail: e.target.value }); clearError('confirmEmail'); }}
-                  className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-500"
-                  placeholder="Confirm Email"
-                />
-                {errors.confirmEmail && <p className="text-red-600 text-xs mt-1">{errors.confirmEmail}</p>}
+            )}
+
+            {/* Row 3: Email, Confirm Email (hide if existing user selected) */}
+            {!formData.existingUserId && (  // Hide if existing user is selected
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+                <div>
+                  <label className="block text-xs font-semibold text-gray-700 mb-1">Email <span className="text-red-600">*</span></label>
+                  <input
+                    type="email"
+                    value={formData.email}
+                    onChange={(e) => { setFormData({ ...formData, email: e.target.value }); clearError('email'); }}
+                    className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-500"
+                    placeholder="Email"
+                  />
+                  {errors.email && <p className="text-red-600 text-xs mt-1">{errors.email}</p>}
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-gray-700 mb-1">Confirm Email <span className="text-red-600">*</span></label>
+                  <input
+                    type="email"
+                    value={formData.confirmEmail}
+                    onChange={(e) => { setFormData({ ...formData, confirmEmail: e.target.value }); clearError('confirmEmail'); }}
+                    className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-500"
+                    placeholder="Confirm Email"
+                  />
+                  {errors.confirmEmail && <p className="text-red-600 text-xs mt-1">{errors.confirmEmail}</p>}
+                </div>
               </div>
-            </div>
+            )}
 
             {/* Row 4: Phone, Role */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
-              <div>
-                <label className="block text-xs font-semibold text-gray-700 mb-1">Phone No <span className="text-red-600">*</span></label>
-                <input
-                  type="tel"
-                  value={formData.phoneNo}
-                  onChange={(e) => { setFormData({ ...formData, phoneNo: e.target.value }); clearError('phoneNo'); }}
-                  className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-500"
-                  placeholder="10-digit number"
-                />
-                {errors.phoneNo && <p className="text-red-600 text-xs mt-1">{errors.phoneNo}</p>}
-              </div>
+              {!formData.existingUserId && (  // Hide phone if existing user selected
+                <div>
+                  <label className="block text-xs font-semibold text-gray-700 mb-1">Phone No <span className="text-red-600">*</span></label>
+                  <input
+                    type="tel"
+                    value={formData.phoneNo}
+                    onChange={(e) => { setFormData({ ...formData, phoneNo: e.target.value }); clearError('phoneNo'); }}
+                    className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-500"
+                    placeholder="10-digit number"
+                  />
+                  {errors.phoneNo && <p className="text-red-600 text-xs mt-1">{errors.phoneNo}</p>}
+                </div>
+              )}
               <div>
                 <label className="block text-xs font-semibold text-gray-700 mb-1">Role: <span className="text-red-600">*</span></label>
                 <select
@@ -319,7 +383,7 @@ const AddUser: React.FC = () => {
                   className="w-full border border-gray-300 rounded px-3 py-2 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-gray-500"
                 >
                   <option value="">None Selected</option>
-                  {userGroups.map(g => <option key={g.id} value={g.id}>{g.name}</option>)}
+                  {USER_GROUPS.map(g => <option key={g.id} value={g.name}>{g.name}</option>)}
                 </select>
                 {errors.userGroup && <p className="text-red-600 text-xs mt-1">{errors.userGroup}</p>}
               </div>
