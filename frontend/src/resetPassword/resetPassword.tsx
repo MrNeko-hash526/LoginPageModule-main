@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import * as yup from 'yup';
+import { Mail, Lock, AlertCircle, CheckCircle, X } from 'lucide-react';
 
 interface ResetPasswordForm {
   email: string;
@@ -28,78 +29,35 @@ const ResetPassword: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [toasts, setToasts] = useState<Toast[]>([]);
 
-  // Toast functions
-  const showToast = (message: string, type: 'success' | 'error' | 'info' | 'warning' = 'info') => {
-    const id = Date.now().toString();
+  // Toast functions (unique ids)
+  const showToast = (message: string, type: Toast['type'] = 'info') => {
+    const id = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2,8)}`;
     const newToast: Toast = { id, message, type };
-    
     setToasts(prev => [...prev, newToast]);
-    
-    // Auto remove toast after 5 seconds
-    setTimeout(() => {
-      removeToast(id);
-    }, 5000);
+    setTimeout(() => removeToast(id), 5000);
   };
 
   const removeToast = (id: string) => {
     setToasts(prev => prev.filter(toast => toast.id !== id));
   };
 
-  // Toast component
+  // Toast component styled for dark theme (black, gray, blue)
   const ToastContainer = () => (
-    <div className="fixed top-4 right-4 z-50 space-y-2">
+    <div className="fixed top-4 right-4 z-50 space-y-3">
       {toasts.map(toast => (
-        <div
-          key={toast.id}
-          className={`
-            max-w-sm w-full bg-white shadow-lg rounded-lg pointer-events-auto flex ring-1 ring-black ring-opacity-5 transform transition-all duration-300 ease-in-out
-            ${toast.type === 'success' ? 'border-l-4 border-green-400' : ''}
-            ${toast.type === 'error' ? 'border-l-4 border-red-400' : ''}
-            ${toast.type === 'warning' ? 'border-l-4 border-yellow-400' : ''}
-            ${toast.type === 'info' ? 'border-l-4 border-blue-400' : ''}
-          `}
-        >
-          <div className="flex-1 w-0 p-4">
-            <div className="flex items-start">
-              <div className="flex-shrink-0">
-                {toast.type === 'success' && (
-                  <svg className="h-6 w-6 text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
-                )}
-                {toast.type === 'error' && (
-                  <svg className="h-6 w-6 text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
-                )}
-                {toast.type === 'warning' && (
-                  <svg className="h-6 w-6 text-yellow-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.98-.833-2.75 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z" />
-                  </svg>
-                )}
-                {toast.type === 'info' && (
-                  <svg className="h-6 w-6 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
-                )}
-              </div>
-              <div className="ml-3 w-0 flex-1 pt-0.5">
-                <p className="text-sm font-medium text-gray-900">
-                  {toast.message}
-                </p>
-              </div>
-            </div>
+        <div key={toast.id} className="max-w-sm w-full bg-gray-900 border border-gray-800 rounded-lg shadow-lg p-3 flex items-start gap-3">
+          <div className="mt-0.5">
+            {toast.type === 'success' && <CheckCircle className="w-6 h-6 text-blue-400" />}
+            {toast.type === 'error' && <AlertCircle className="w-6 h-6 text-red-400" />}
+            {toast.type === 'info' && <Mail className="w-6 h-6 text-blue-300" />}
+            {toast.type === 'warning' && <AlertCircle className="w-6 h-6 text-yellow-400" />}
           </div>
-          <div className="flex border-l border-gray-200">
-            <button
-              onClick={() => removeToast(toast.id)}
-              className="w-full border border-transparent rounded-none rounded-r-lg p-4 flex items-center justify-center text-sm font-medium text-gray-600 hover:text-gray-500 focus:outline-none focus:ring-2 focus:ring-gray-500"
-            >
-              <svg className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
-              </svg>
-            </button>
+          <div className="flex-1">
+            <p className="text-sm text-gray-100">{toast.message}</p>
           </div>
+          <button onClick={() => removeToast(toast.id)} className="text-gray-400 hover:text-gray-200">
+            <X className="w-4 h-4" />
+          </button>
         </div>
       ))}
     </div>
@@ -133,18 +91,16 @@ const ResetPassword: React.FC = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-    
+
     try {
       await schema.validate(formData, { abortEarly: false });
       setErrors({});
-      
+
       showToast('Resetting your password...', 'info');
 
       const response = await fetch('/api/auth/set-password', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           email: formData.email,
           token: formData.otp,
@@ -155,11 +111,7 @@ const ResetPassword: React.FC = () => {
       const data = await response.json();
       if (response.ok) {
         showToast('Password reset successfully! Redirecting to login...', 'success');
-        
-        // Navigate after a short delay to allow user to see the success message
-        setTimeout(() => {
-          navigate('/login');
-        }, 2000);
+        setTimeout(() => navigate('/login'), 1600);
       } else {
         showToast(data.message || 'Failed to reset password', 'error');
       }
@@ -180,120 +132,124 @@ const ResetPassword: React.FC = () => {
   };
 
   const handleReset = () => {
-    setFormData({
-      email: '',
-      otp: '',
-      newPassword: '',
-      confirmPassword: ''
-    });
+    setFormData({ email: '', otp: '', newPassword: '', confirmPassword: '' });
     setErrors({});
     showToast('Form reset successfully', 'info');
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
-      {/* Toast Container */}
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-900 via-blue-900 to-slate-800 p-6">
       <ToastContainer />
-      
-      <div className="max-w-md w-full space-y-8">
-        <div>
-          <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900">Reset Password</h2>
-          <p className="mt-2 text-center text-sm text-gray-600">
-            Enter your new password to complete the reset process.
-          </p>
+
+      <div className="w-full max-w-lg">
+        <div className="text-center mb-6">
+          <div className="inline-flex items-center justify-center w-20 h-20 bg-white rounded-3xl mb-4 shadow-2xl">
+            <Mail className="w-8 h-8 text-slate-900" />
+          </div>
+          <h2 className="text-3xl font-bold text-white mb-2">Reset Password</h2>
+          <p className="text-slate-300">Enter a new password for your account</p>
         </div>
-        <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
-          <div className="rounded-md shadow-sm -space-y-px">
+
+        <div className="bg-gray-900 rounded-2xl p-6 shadow-lg border border-gray-800">
+          <form onSubmit={handleSubmit} className="space-y-5">
+            {/* Email */}
             <div>
-              <label htmlFor="email" className="sr-only">Email</label>
-              <input
-                id="email"
-                name="email"
-                type="email"
-                required
-                readOnly  // Pre-filled from URL
-                className="appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-t-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 focus:z-10 sm:text-sm bg-gray-100"
-                placeholder="Email address"
-                value={formData.email}
-                onChange={(e) => { setFormData({ ...formData, email: e.target.value }); clearError('email'); }}
-              />
-              {errors.email && <p className="text-red-600 text-xs mt-1">{errors.email}</p>}
+              <label className="block text-sm font-semibold text-gray-300 mb-2">Email</label>
+              <div className="relative">
+                <div className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400">
+                  <Mail className="w-5 h-5" />
+                </div>
+                <input
+                  type="email"
+                  readOnly
+                  value={formData.email}
+                  onChange={(e) => { setFormData({ ...formData, email: e.target.value }); clearError('email'); }}
+                  placeholder="email@example.com"
+                  className="w-full h-12 pl-12 pr-4 rounded-xl bg-gray-800 border border-gray-700 text-white placeholder-gray-500 focus:border-blue-500 focus:bg-gray-800"
+                />
+              </div>
+              {errors.email && <p className="text-red-400 text-xs mt-1">{errors.email}</p>}
             </div>
+
+            {/* Token */}
             <div>
-              <label htmlFor="otp" className="sr-only">Reset Token</label>
-              <input
-                id="otp"
-                name="otp"
-                type="text"
-                required
-                readOnly  // Pre-filled from URL
-                className="appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 focus:z-10 sm:text-sm bg-gray-100"
-                placeholder="Reset Token"
-                value={formData.otp}
-                onChange={(e) => { setFormData({ ...formData, otp: e.target.value }); clearError('otp'); }}
-              />
-              {errors.otp && <p className="text-red-600 text-xs mt-1">{errors.otp}</p>}
+              <label className="block text-sm font-semibold text-gray-300 mb-2">Reset Token</label>
+              <div className="relative">
+                <div className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400">
+                  <Lock className="w-5 h-5" />
+                </div>
+                <input
+                  type="text"
+                  readOnly
+                  value={formData.otp}
+                  onChange={(e) => { setFormData({ ...formData, otp: e.target.value }); clearError('otp'); }}
+                  placeholder="Reset token"
+                  className="w-full h-12 pl-12 pr-4 rounded-xl bg-gray-800 border border-gray-700 text-white placeholder-gray-500 focus:border-blue-500 focus:bg-gray-800"
+                />
+              </div>
+              {errors.otp && <p className="text-red-400 text-xs mt-1">{errors.otp}</p>}
             </div>
+
+            {/* New password */}
             <div>
-              <label htmlFor="newPassword" className="sr-only">New Password</label>
+              <label className="block text-sm font-semibold text-gray-300 mb-2">New Password</label>
+              <div className="relative">
+                <div className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400">
+                  <Lock className="w-5 h-5" />
+                </div>
+                <input
+                  type="password"
+                  value={formData.newPassword}
+                  onChange={(e) => { setFormData({ ...formData, newPassword: e.target.value }); clearError('newPassword'); }}
+                  placeholder="Minimum 6 characters"
+                  className="w-full h-12 pl-12 pr-4 rounded-xl bg-gray-800 border border-gray-700 text-white placeholder-gray-500 focus:border-blue-500 focus:bg-gray-800"
+                />
+              </div>
+              {errors.newPassword && <p className="text-red-400 text-xs mt-1">{errors.newPassword}</p>}
+            </div>
+
+            {/* Confirm password */}
+            <div>
+              <label className="block text-sm font-semibold text-gray-300 mb-2">Confirm Password</label>
               <input
-                id="newPassword"
-                name="newPassword"
                 type="password"
-                required
-                className="appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 focus:z-10 sm:text-sm"
-                placeholder="New password (min 6 characters)"
-                value={formData.newPassword}
-                onChange={(e) => { setFormData({ ...formData, newPassword: e.target.value }); clearError('newPassword'); }}
-              />
-              {errors.newPassword && <p className="text-red-600 text-xs mt-1">{errors.newPassword}</p>}
-            </div>
-            <div>
-              <label htmlFor="confirmPassword" className="sr-only">Confirm Password</label>
-              <input
-                id="confirmPassword"
-                name="confirmPassword"
-                type="password"
-                required
-                className="appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-b-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 focus:z-10 sm:text-sm"
-                placeholder="Confirm new password"
                 value={formData.confirmPassword}
                 onChange={(e) => { setFormData({ ...formData, confirmPassword: e.target.value }); clearError('confirmPassword'); }}
+                placeholder="Re-type new password"
+                className="w-full h-12 pl-4 pr-4 rounded-xl bg-gray-800 border border-gray-700 text-white placeholder-gray-500 focus:border-blue-500 focus:bg-gray-800"
               />
-              {errors.confirmPassword && <p className="text-red-600 text-xs mt-1">{errors.confirmPassword}</p>}
+              {errors.confirmPassword && <p className="text-red-400 text-xs mt-1">{errors.confirmPassword}</p>}
             </div>
-          </div>
 
-          <div>
-            <button
-              type="submit"
-              disabled={loading}
-              className="group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50"
-            >
-              {loading ? 'Resetting Password...' : 'Reset Password'}
-            </button>
-          </div>
+            <div className="flex gap-3">
+              <button
+                type="submit"
+                disabled={loading}
+                className="flex-1 h-12 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 rounded-xl text-white font-semibold shadow-md disabled:opacity-60"
+              >
+                {loading ? 'Resetting...' : 'Reset Password'}
+              </button>
 
-          <div>
-            <button
-              type="button"
-              onClick={handleReset}
-              className="group relative w-full flex justify-center py-2 px-4 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-            >
-              Clear Form
-            </button>
-          </div>
+              <button
+                type="button"
+                onClick={handleReset}
+                className="w-36 h-12 bg-gray-800 border border-gray-700 rounded-xl text-gray-200 hover:bg-gray-800/90"
+              >
+                Clear
+              </button>
+            </div>
 
-          <div className="text-center">
-            <button
-              type="button"
-              onClick={() => navigate('/login')}
-              className="text-indigo-600 hover:text-indigo-500 text-sm"
-            >
-              Back to Login
-            </button>
-          </div>
-        </form>
+            <div className="text-center">
+              <button type="button" onClick={() => navigate('/login')} className="text-sm text-blue-300 hover:text-blue-200">
+                Back to Login
+              </button>
+            </div>
+          </form>
+        </div>
+
+        <div className="mt-4 text-center">
+          <p className="text-slate-400 text-xs">© {new Date().getFullYear()} Enterprise Platform. All rights reserved.</p>
+        </div>
       </div>
     </div>
   );

@@ -57,24 +57,21 @@ const AddUser: React.FC = () => {
 
   // Toast functions
   const showToast = (message: string, type: 'success' | 'error' | 'info' | 'warning' = 'info') => {
-    const id = Date.now().toString();
+    // ensure unique id even if called quickly
+    const id = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2,9)}`;
     const newToast: Toast = { id, message, type };
-    
     setToasts(prev => [...prev, newToast]);
-    
     // Auto remove toast after 5 seconds
-    setTimeout(() => {
-      removeToast(id);
-    }, 5000);
+    setTimeout(() => removeToast(id), 5000);
   };
-
-  const removeToast = (id: string) => {
+ 
+   const removeToast = (id: string) => {
     setToasts(prev => prev.filter(toast => toast.id !== id));
   };
-
-  // Toast component
-  const ToastContainer = () => (
-    <div className="fixed top-4 right-4 z-50 space-y-2">
+ 
+   // Toast component
+   const ToastContainer = () => (
+     <div className="fixed top-4 right-4 z-50 space-y-2">
       {toasts.map(toast => (
         <div
           key={toast.id}
@@ -130,7 +127,7 @@ const AddUser: React.FC = () => {
         </div>
       ))}
     </div>
-  );
+   );
 
   useEffect(() => {
     const token = localStorage.getItem('token');
@@ -169,11 +166,17 @@ const AddUser: React.FC = () => {
   const fetchUsers = async () => {
     try {
       const token = localStorage.getItem('token');
-      const res = await fetch('/api/auth/users', { headers: { Authorization: `Bearer ${token}` } });
+      const res = await fetch('/api/adduser/users', { headers: { Authorization: `Bearer ${token}` } });
+      if (res.status === 401) {
+        localStorage.removeItem('token');
+        navigate('/login');
+        return;
+      }
       if (res.ok) {
         const data = await res.json();
-        setUsers(data.users || []);
-        showToast('Users loaded successfully', 'success');
+        // backend may return either array or { users: [...] }
+        setUsers(Array.isArray(data) ? data : (data.users || []));
+        // avoid noisy toasts on normal loads — show only on error
       } else {
         showToast('Failed to fetch users', 'error');
       }
@@ -182,15 +185,19 @@ const AddUser: React.FC = () => {
       showToast('Error loading users', 'error');
     }
   };
-
+ 
   const fetchCompanies = async () => {
     try {
       const token = localStorage.getItem('token');
-      const res = await fetch('/api/auth/companies', { headers: { Authorization: `Bearer ${token}` } });
+      const res = await fetch('/api/adduser/companies', { headers: { Authorization: `Bearer ${token}` } });
+      if (res.status === 401) {
+        localStorage.removeItem('token');
+        navigate('/login');
+        return;
+      }
       if (res.ok) {
         const data = await res.json();
-        setCompanies(data.companies || []);
-        showToast('Companies loaded successfully', 'success');
+        setCompanies(Array.isArray(data) ? data : (data.companies || []));
       } else {
         showToast('Failed to fetch companies', 'error');
       }
@@ -199,15 +206,19 @@ const AddUser: React.FC = () => {
       showToast('Error loading companies', 'error');
     }
   };
-
+ 
   const fetchUserGroups = async () => {
     try {
       const token = localStorage.getItem('token');
-      const res = await fetch('/api/auth/user-groups', { headers: { Authorization: `Bearer ${token}` } });
+      const res = await fetch('/api/adduser/user-groups', { headers: { Authorization: `Bearer ${token}` } });
+      if (res.status === 401) {
+        localStorage.removeItem('token');
+        navigate('/login');
+        return;
+      }
       if (res.ok) {
         const data = await res.json();
-        setUserGroups(data.userGroups || []);
-        showToast('User groups loaded successfully', 'success');
+        setUserGroups(Array.isArray(data) ? data : (data.userGroups || []));
       } else {
         showToast('Failed to fetch user groups', 'error');
       }
@@ -216,15 +227,19 @@ const AddUser: React.FC = () => {
       showToast('Error loading user groups', 'error');
     }
   };
-
+ 
   const fetchRoles = async () => {
     try {
       const token = localStorage.getItem('token');
-      const res = await fetch('/api/auth/roles', { headers: { Authorization: `Bearer ${token}` } });
+      const res = await fetch('/api/adduser/roles', { headers: { Authorization: `Bearer ${token}` } });
+      if (res.status === 401) {
+        localStorage.removeItem('token');
+        navigate('/login');
+        return;
+      }
       if (res.ok) {
         const data = await res.json();
-        setRoles(data.roles || []);
-        showToast('Roles loaded successfully', 'success');
+        setRoles(Array.isArray(data) ? data : (data.roles || []));
       } else {
         showToast('Failed to fetch roles', 'error');
       }
@@ -325,7 +340,7 @@ const AddUser: React.FC = () => {
         };
       }
 
-      const res = await fetch('/api/auth/users', {
+      const res = await fetch('/api/adduser/create-user', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify(payload)

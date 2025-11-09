@@ -1,19 +1,17 @@
 const express = require('express');
 const router = express.Router();
-const { 
-  createUser,
-  getUserGroups,
-  getUsers,
-  getCompanies,
-  getRoles
-} = require('./add.controller');
-const { authenticateJWT, requireAdmin } = require('./add.middleware');
+const { createUser, getUserGroups, getUsers, getCompanies, getRoles } = require('./add.controller');
+const { authenticateJWT, requireAdminOrManager } = require('./add.middleware');
 
-// Routes for add user functionality
-router.post('/users', authenticateJWT, requireAdmin, createUser);
-router.get('/user-groups', authenticateJWT, requireAdmin, getUserGroups);
-router.get('/users', authenticateJWT, requireAdmin, getUsers);
-router.get('/companies', authenticateJWT, requireAdmin, getCompanies);
-router.get('/roles', authenticateJWT, requireAdmin, getRoles);
+router.post('/create-user', authenticateJWT, requireAdminOrManager, createUser);
+router.get('/user-groups', authenticateJWT, requireAdminOrManager, getUserGroups);
+router.get('/users', authenticateJWT, requireAdminOrManager, getUsers);
+router.get('/companies', authenticateJWT, requireAdminOrManager, getCompanies);
+router.get('/roles', authenticateJWT, requireAdminOrManager, getRoles);
+
+// Debug route to inspect token / roles
+router.get('/debug/auth', authenticateJWT, (req, res) => {
+  res.json({ success: true, user: req.user });
+});
 
 module.exports = router;

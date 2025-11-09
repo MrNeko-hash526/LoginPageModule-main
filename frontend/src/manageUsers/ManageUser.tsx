@@ -28,13 +28,46 @@ const ManageUser: React.FC = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  // Toasts: improved UI and controlled length
+  interface Toast { id: string; message: string; type?: 'success' | 'error' | 'info' }
+  const [toasts, setToasts] = useState<Toast[]>([]);
+  const MAX_TOAST_LENGTH = 140;
+
+  const showToast = (message: string, type: Toast['type'] = 'info') => {
+    // trim/normalize message length
+    const clean = (message || '').toString().trim();
+    const short = clean.length > MAX_TOAST_LENGTH ? `${clean.slice(0, MAX_TOAST_LENGTH - 3)}...` : clean;
+    const id = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2,8)}`;
+    setToasts(prev => [...prev, { id, message: short, type }]);
+    // auto remove after 5s
+    setTimeout(() => setToasts(prev => prev.filter(t => t.id !== id)), 5000);
+  };
+
+  const ToastContainer: React.FC = () => (
+    <div className="fixed top-4 right-4 z-50 flex flex-col gap-2">
+      {toasts.map(t => (
+        <div key={t.id} className={`max-w-sm w-full px-3 py-2 rounded-lg shadow-lg border ${t.type === 'success' ? 'bg-gray-900 border-blue-700' : t.type === 'error' ? 'bg-gray-900 border-red-700' : 'bg-gray-900 border-gray-800'}`}>
+          <div className="flex items-start gap-2">
+            <div className="mt-0.5">
+              <span className={`inline-block w-3 h-3 rounded-full ${t.type === 'success' ? 'bg-blue-400' : t.type === 'error' ? 'bg-red-400' : 'bg-gray-400'}`} />
+            </div>
+            <div className="flex-1">
+              <div className="text-sm text-gray-100">{t.message}</div>
+            </div>
+            <button onClick={() => setToasts(prev => prev.filter(x => x.id !== t.id))} className="text-gray-400 hover:text-gray-200 ml-2">×</button>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+
   // controls
   const [searchTerm, setSearchTerm] = useState('');
   const [roleFilter, setRoleFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage] = useState(10);
-
+  
   // sorting
   const [sortColumn, setSortColumn] = useState<
     'name' | 'email' | 'phone_no' | 'userType' | 'user_group' | 'code' | 'companyStatus' | 'isActive' | 'role'
@@ -64,6 +97,7 @@ const ManageUser: React.FC = () => {
 
       if (response.status === 403) {
         setError('Access denied. You need Admin or Manager privileges to view users.');
+        showToast('Access denied. Admin or Manager privileges required.', 'error');
         return;
       }
 
@@ -83,7 +117,9 @@ const ManageUser: React.FC = () => {
       setUsers(data.users || []);
       setTotal(data.total || 0);
     } catch (err: any) {
-      setError(err.message || 'Something went wrong');
+      const msg = err?.message || 'Something went wrong';
+      setError(msg);
+      showToast(msg, 'error');
     } finally {
       setIsLoading(false);
     }
@@ -191,8 +227,11 @@ const ManageUser: React.FC = () => {
       }
       if (!res.ok) throw new Error('Failed to update status');
       fetchUsers(currentPage); // Refresh the current page
+      showToast(`User ${!currentStatus ? 'activated' : 'deactivated'} successfully.`, 'success');
     } catch (err: any) {
-      setError(err.message || 'Failed to update status');
+      const msg = err?.message || 'Failed to update status';
+      setError(msg);
+      showToast(msg, 'error');
     }
   };
 
@@ -215,8 +254,11 @@ const ManageUser: React.FC = () => {
       }
       if (!res.ok) throw new Error('Failed to delete user');
       fetchUsers(currentPage); // Refresh the current page
+      showToast('User deleted', 'success');
     } catch (err: any) {
-      setError(err.message || 'Failed to delete user');
+      const msg = err?.message || 'Failed to delete user';
+      setError(msg);
+      showToast(msg, 'error');
     }
   };
 
@@ -241,9 +283,11 @@ const ManageUser: React.FC = () => {
         return;
       }
       if (!res.ok) throw new Error('Failed to resend reset email');
-      alert(`Reset email sent to ${userEmail}`);
+      showToast(`Reset email sent to ${userEmail}`, 'success');
     } catch (err: any) {
-      setError(err.message || 'Failed to resend reset email');
+      const msg = err?.message || 'Failed to resend reset email';
+      setError(msg);
+      showToast(msg, 'error');
     }
   };
 
@@ -282,6 +326,7 @@ const ManageUser: React.FC = () => {
   if (isLoading) {
     return (
       <div className="min-h-screen bg-gray-100 p-4">
+        <ToastContainer />
         <div className="max-w-7xl mx-auto space-y-3">
           <TableSkeleton />
         </div>
@@ -295,6 +340,7 @@ const ManageUser: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-gray-100 p-4">
+      <ToastContainer />
       <div className="max-w-7xl mx-auto space-y-3">
         {error && (
           <div className="bg-red-50 text-red-700 border border-red-200 rounded-md px-3 py-2 text-sm">
