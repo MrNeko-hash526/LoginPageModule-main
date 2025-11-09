@@ -8,10 +8,12 @@ interface Company { id: string; name: string; parentId?: string; }
 interface Role { id: string; name: string; }
 
 interface NewUserForm {
+  companyId: string;
   firstName: string; lastName: string; email: string; confirmEmail: string;
   phoneNo?: string; role: string; userGroup: string[]; isActive: boolean;
 }
 interface ExistingUserForm {
+  companyId: string;
   existingUserId: string; role: string; userGroup?: string[]; isActive: boolean;
 }
 
@@ -195,28 +197,32 @@ const AddUser: React.FC = () => {
 
       let payload: any;
       if (isExisting) {
+        const v = validated as ExistingUserForm;
         payload = {
-          existingUserId: validated.existingUserId,
-          role: validated.role,
-          isActive: validated.isActive
+          companyId: v.companyId,
+          existingUserId: v.existingUserId,
+          role: v.role,
+          isActive: v.isActive
         };
       } else {
+        const v = validated as NewUserForm;
         payload = {
-          firstName: validated.firstName,
-          lastName: validated.lastName,
-          email: validated.email,
-          confirmEmail: validated.confirmEmail,
-          phoneNo: validated.phoneNo,
-          role: validated.role,
-          userGroup: validated.userGroup,
-          isActive: validated.isActive
+          companyId: v.companyId,
+          firstName: v.firstName,
+          lastName: v.lastName,
+          email: v.email,
+          confirmEmail: v.confirmEmail,
+          phoneNo: v.phoneNo,
+          role: v.role,
+          userGroup: v.userGroup,
+          isActive: v.isActive
         };
       }
 
       const res = await fetch('/api/auth/users', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ ...payload, companyId: validated.companyId })
+        body: JSON.stringify(payload)
       });
       
       const result = await res.json();
