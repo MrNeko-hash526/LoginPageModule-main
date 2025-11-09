@@ -52,9 +52,23 @@ async function requireAdmin(req, res, next) {
     return res.status(401).json({ success: false, message: 'Authentication required' });
   }
 
-  const userTypes = req.user.userTypes || [];
-  if (!userTypes.includes('Admin')) {
+  const userTypes = (req.user.userTypes || []).map(t => String(t).toLowerCase());
+  if (!userTypes.includes('admin')) {
     return res.status(403).json({ success: false, message: 'Admin access required' });
+  }
+
+  next();
+}
+
+// New: allow Admin OR Manager
+async function requireAdminOrManager(req, res, next) {
+  if (!req.user) {
+    return res.status(401).json({ success: false, message: 'Authentication required' });
+  }
+
+  const userTypes = (req.user.userTypes || []).map(t => String(t).toLowerCase());
+  if (!userTypes.includes('admin') && !userTypes.includes('manager')) {
+    return res.status(403).json({ success: false, message: 'Admin or Manager access required' });
   }
 
   next();
@@ -76,4 +90,4 @@ async function canManageUser(req, res, next) {
   next();
 }
 
-module.exports = { authenticateJWT, requireAdmin, canManageUser };
+module.exports = { authenticateJWT, requireAdmin, canManageUser, requireAdminOrManager };

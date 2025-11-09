@@ -7,8 +7,8 @@ const manageuserRoutes = require('./manageuser/manageuser.route');
 const adduserRoutes = require('./adduser/add.route');  // Import adduser routes
 
 router.use('/auth', authRoutes);  // Auth routes (login, etc.)
-router.use('/auth', manageuserRoutes);  // Manage user routes
-router.use('/auth', adduserRoutes);  // Add user routes (users, companies, etc.)
+router.use('/manageuser', manageuserRoutes);  // FIXED: Manage user routes now on /manageuser
+router.use('/adduser', adduserRoutes);  // FIXED: Add user routes now on /adduser
 
 // Global error handler for the router (catches unhandled errors)
 router.use((err, req, res, next) => {

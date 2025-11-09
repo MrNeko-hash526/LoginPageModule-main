@@ -17,6 +17,12 @@ interface ExistingUserForm {
   existingUserId: string; role: string; userGroup?: string[]; isActive: boolean;
 }
 
+interface Toast {
+  id: string;
+  message: string;
+  type: 'success' | 'error' | 'info' | 'warning';
+}
+
 const AddUser: React.FC = () => {
   const navigate = useNavigate();
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -25,6 +31,7 @@ const AddUser: React.FC = () => {
   const [userGroups, setUserGroups] = useState<UserGroup[]>([]);
   const [roles, setRoles] = useState<Role[]>([]);
   const [errors, setErrors] = useState<{ [key: string]: string }>({});
+  const [toasts, setToasts] = useState<Toast[]>([]);
 
   // Add these new state variables for dropdown functionality
   const [showUserGroupDropdown, setShowUserGroupDropdown] = useState(false);
@@ -48,9 +55,87 @@ const AddUser: React.FC = () => {
     group.name.toLowerCase().includes(userGroupSearch.toLowerCase())
   );
 
+  // Toast functions
+  const showToast = (message: string, type: 'success' | 'error' | 'info' | 'warning' = 'info') => {
+    const id = Date.now().toString();
+    const newToast: Toast = { id, message, type };
+    
+    setToasts(prev => [...prev, newToast]);
+    
+    // Auto remove toast after 5 seconds
+    setTimeout(() => {
+      removeToast(id);
+    }, 5000);
+  };
+
+  const removeToast = (id: string) => {
+    setToasts(prev => prev.filter(toast => toast.id !== id));
+  };
+
+  // Toast component
+  const ToastContainer = () => (
+    <div className="fixed top-4 right-4 z-50 space-y-2">
+      {toasts.map(toast => (
+        <div
+          key={toast.id}
+          className={`
+            max-w-sm w-full bg-white shadow-lg rounded-lg pointer-events-auto flex ring-1 ring-black ring-opacity-5 transform transition-all duration-300 ease-in-out
+            ${toast.type === 'success' ? 'border-l-4 border-green-400' : ''}
+            ${toast.type === 'error' ? 'border-l-4 border-red-400' : ''}
+            ${toast.type === 'warning' ? 'border-l-4 border-yellow-400' : ''}
+            ${toast.type === 'info' ? 'border-l-4 border-blue-400' : ''}
+          `}
+        >
+          <div className="flex-1 w-0 p-4">
+            <div className="flex items-start">
+              <div className="flex-shrink-0">
+                {toast.type === 'success' && (
+                  <svg className="h-6 w-6 text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                )}
+                {toast.type === 'error' && (
+                  <svg className="h-6 w-6 text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                )}
+                {toast.type === 'warning' && (
+                  <svg className="h-6 w-6 text-yellow-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.98-.833-2.75 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z" />
+                  </svg>
+                )}
+                {toast.type === 'info' && (
+                  <svg className="h-6 w-6 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                )}
+              </div>
+              <div className="ml-3 w-0 flex-1 pt-0.5">
+                <p className="text-sm font-medium text-gray-900">
+                  {toast.message}
+                </p>
+              </div>
+            </div>
+          </div>
+          <div className="flex border-l border-gray-200">
+            <button
+              onClick={() => removeToast(toast.id)}
+              className="w-full border border-transparent rounded-none rounded-r-lg p-4 flex items-center justify-center text-sm font-medium text-gray-600 hover:text-gray-500 focus:outline-none focus:ring-2 focus:ring-gray-500"
+            >
+              <svg className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+              </svg>
+            </button>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+
   useEffect(() => {
     const token = localStorage.getItem('token');
     if (!token) {
+      showToast('Authentication required. Please login.', 'error');
       navigate('/login');
       return;
     }
@@ -88,9 +173,13 @@ const AddUser: React.FC = () => {
       if (res.ok) {
         const data = await res.json();
         setUsers(data.users || []);
+        showToast('Users loaded successfully', 'success');
+      } else {
+        showToast('Failed to fetch users', 'error');
       }
     } catch (error) {
       console.error('Error fetching users:', error);
+      showToast('Error loading users', 'error');
     }
   };
 
@@ -101,9 +190,13 @@ const AddUser: React.FC = () => {
       if (res.ok) {
         const data = await res.json();
         setCompanies(data.companies || []);
+        showToast('Companies loaded successfully', 'success');
+      } else {
+        showToast('Failed to fetch companies', 'error');
       }
     } catch (error) {
       console.error('Error fetching companies:', error);
+      showToast('Error loading companies', 'error');
     }
   };
 
@@ -114,9 +207,13 @@ const AddUser: React.FC = () => {
       if (res.ok) {
         const data = await res.json();
         setUserGroups(data.userGroups || []);
+        showToast('User groups loaded successfully', 'success');
+      } else {
+        showToast('Failed to fetch user groups', 'error');
       }
     } catch (error) {
       console.error('Error fetching user groups:', error);
+      showToast('Error loading user groups', 'error');
     }
   };
 
@@ -127,9 +224,13 @@ const AddUser: React.FC = () => {
       if (res.ok) {
         const data = await res.json();
         setRoles(data.roles || []);
+        showToast('Roles loaded successfully', 'success');
+      } else {
+        showToast('Failed to fetch roles', 'error');
       }
     } catch (error) {
       console.error('Error fetching roles:', error);
+      showToast('Error loading roles', 'error');
     }
   };
 
@@ -147,6 +248,7 @@ const AddUser: React.FC = () => {
         email: selectedUser.email || '',
         phoneNo: selectedUser.phone_no || ''
       });
+      showToast(`Selected user: ${selectedUser.firstName} ${selectedUser.lastName}`, 'info');
     }
   };
 
@@ -157,8 +259,10 @@ const AddUser: React.FC = () => {
     let newGroups;
     if (isSelected) {
       newGroups = currentGroups.filter(g => g !== groupName);
+      showToast(`Removed "${groupName}" from selection`, 'info');
     } else {
       newGroups = [...currentGroups, groupName];
+      showToast(`Added "${groupName}" to selection`, 'info');
     }
     
     setFormData({ ...formData, userGroup: newGroups });
@@ -193,6 +297,8 @@ const AddUser: React.FC = () => {
       const validated = await schema.validate(formData, { abortEarly: false });
 
       setIsSubmitting(true);
+      showToast('Creating user...', 'info');
+      
       const token = localStorage.getItem('token');
 
       let payload: any;
@@ -226,17 +332,25 @@ const AddUser: React.FC = () => {
       });
       
       const result = await res.json();
-      if (!res.ok) throw new Error(result.message || 'Failed to create user');
+      if (!res.ok) {
+        throw new Error(result.message || 'Failed to create user');
+      }
       
-      alert(result.message);
-      navigate('/manage-users');
+      showToast(result.message || 'User created successfully!', 'success');
+      
+      // Navigate after a short delay to allow user to see the success message
+      setTimeout(() => {
+        navigate('/manage-users');
+      }, 2000);
+      
     } catch (err: any) {
       if (err.name === 'ValidationError') {
         const obj: Record<string, string> = {};
         err.inner.forEach((e: any) => { obj[e.path] = e.message; });
         setErrors(obj);
+        showToast('Please fix the validation errors', 'error');
       } else {
-        alert(err.message || 'Error');
+        showToast(err.message || 'An error occurred while creating user', 'error');
       }
     } finally {
       setIsSubmitting(false);
@@ -257,12 +371,16 @@ const AddUser: React.FC = () => {
       isActive: true
     });
     setErrors({});
+    showToast('Form reset successfully', 'info');
   };
 
   const clearError = (field: string) => errors[field] && setErrors({ ...errors, [field]: '' });
 
   return (
     <div className="min-h-screen bg-gray-50 p-4">
+      {/* Toast Container */}
+      <ToastContainer />
+      
       <div className="max-w-5xl mx-auto">
         {/* Header */}
         <div className="bg-white border border-gray-200 rounded-md shadow-sm p-4 mb-4">
@@ -478,8 +596,10 @@ const AddUser: React.FC = () => {
                                 onChange={(e) => {
                                   if (e.target.checked) {
                                     setFormData({ ...formData, userGroup: filteredUserGroups.map(g => g.name) });
+                                    showToast(`Selected all ${filteredUserGroups.length} groups`, 'info');
                                   } else {
                                     setFormData({ ...formData, userGroup: [] });
+                                    showToast('Cleared all group selections', 'info');
                                   }
                                   clearError('userGroup');
                                 }}

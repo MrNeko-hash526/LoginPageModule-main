@@ -3,25 +3,27 @@ const { query } = require('../config/db');
 async function getAllUsers(includeDeleted = false, page = null, limit = null) {
   try {
     const deletedFilter = includeDeleted ? '' : 'AND u.bit_deleted_flag = 0';
+    
+    // Simple SQL - get users first
     let sql = `
-      SELECT u.user_id AS _id, u.first_name AS firstName, u.last_name AS lastName, u.email AS username, u.email, u.phone_no,
-             COALESCE(GROUP_CONCAT(DISTINCT r.role_name), '') AS role, u.user_group, u.active_inactive_status AS isActive,
-             MAX(la.mail_time) AS lastLogin, COALESCE(GROUP_CONCAT(DISTINCT c.company_name), '') AS companies,
-             COALESCE(GROUP_CONCAT(DISTINCT r.role_name), '') AS roles, 'CONV' AS userType, 'ALL' AS code,
-             COALESCE(MAX(CASE WHEN c.company_status = 1 THEN 'Active' ELSE 'Inactive' END), 'Inactive') AS companyStatus,
-             u.bit_deleted_flag AS isDeleted
+      SELECT 
+        u.user_id AS _id,
+        u.first_name,
+        u.last_name, 
+        u.email,
+        u.phone_no,
+        u.user_group,
+        u.active_inactive_status,
+        u.bit_deleted_flag AS isDeleted,
+        u.created_at
       FROM users u
-      LEFT JOIN user_roles ur ON u.user_id = ur.user_id AND ur.bit_deleted_flag = 0
-      LEFT JOIN roles r ON ur.role_id = r.role_id
-      LEFT JOIN companies c ON ur.company_id = c.company_id
-      LEFT JOIN login_activity la ON u.user_id = la.user_id
       WHERE 1=1 ${deletedFilter}
-      GROUP BY u.user_id
+      ORDER BY u.created_at DESC
     `;
+    
     let countSql = `
-      SELECT COUNT(DISTINCT u.user_id) AS total
-      FROM users u
-      LEFT JOIN user_roles ur ON u.user_id = ur.user_id AND ur.bit_deleted_flag = 0
+      SELECT COUNT(u.user_id) AS total
+      FROM users u  
       WHERE 1=1 ${deletedFilter}
     `;
 
@@ -35,9 +37,79 @@ async function getAllUsers(includeDeleted = false, page = null, limit = null) {
       query(countSql)
     ]);
 
+    console.log('🔧 Raw DB rows sample:', rows[0]);
+
+    // For each user, get their roles and user groups
+    const users = [];
+    for (const r of rows) {
+      // Get roles for this user
+      const userRoles = await query(`
+        SELECT r.role_name 
+        FROM user_roles ur
+        JOIN roles r ON ur.role_id = r.role_id  
+        WHERE ur.user_id = ? AND ur.bit_deleted_flag = 0
+      `, [r._id]);
+
+      // Get user groups for this user (from user_group_assignments table)
+      const userGroups = await query(`
+        SELECT ug.group_name
+        FROM user_group_assignments uga
+        JOIN user_groups ug ON uga.group_id = ug.group_id
+        WHERE uga.user_id = ? AND uga.bit_deleted_flag = 0 AND ug.is_active = 1
+      `, [r._id]);
+
+      // Get companies for this user
+      const userCompanies = await query(`
+        SELECT DISTINCT c.company_name
+        FROM user_roles ur
+        JOIN companies c ON ur.company_id = c.company_id
+        WHERE ur.user_id = ? AND ur.bit_deleted_flag = 0
+      `, [r._id]);
+
+      // Parse user_group from users table (if it exists as JSON)
+      let parsedUserGroup = '';
+      try {
+        if (r.user_group) {
+          const parsed = JSON.parse(r.user_group);
+          parsedUserGroup = Array.isArray(parsed) ? parsed.join(', ') : parsed.toString();
+        }
+      } catch (e) {
+        parsedUserGroup = r.user_group || '';
+      }
+
+      // Combine user_groups table data with users.user_group column
+      const allUserGroups = [
+        ...userGroups.map(ug => ug.group_name),
+        ...(parsedUserGroup ? [parsedUserGroup] : [])
+      ].filter(g => g.trim()).join(', ');
+
+      users.push({
+        _id: r._id,
+        firstName: r.first_name || '',
+        lastName: r.last_name || '',
+        username: r.email || '',
+        email: r.email || '',
+        phone_no: r.phone_no || '',
+        user_group: allUserGroups || '',
+        // Convert 1/0 to true/false
+        isActive: Number(r.active_inactive_status) === 1,
+        lastLogin: null, // You can add login_activity query if needed
+        companies: userCompanies.map(c => c.company_name),
+        role: userRoles.map(ur => ur.role_name).join(', '), 
+        roles: userRoles.map(ur => ur.role_name),
+        userType: 'CONV',
+        code: 'ALL', 
+        companyStatus: 'Active',
+        isDeleted: Number(r.isDeleted) === 1,
+        created_at: r.created_at
+      });
+    }
+
+    console.log('🔧 Normalized users sample:', users[0]);
+
     return {
-      users: rows,
-      total: countRows[0].total
+      users,
+      total: (countRows && countRows[0] && countRows[0].total) || 0
     };
   } catch (error) {
     console.error('Error in getAllUsers:', error);
@@ -47,18 +119,23 @@ async function getAllUsers(includeDeleted = false, page = null, limit = null) {
 
 async function toggleUserStatus(userId, isActive) {
   try {
-    await query(`UPDATE users SET active_inactive_status = ? WHERE user_id = ?`, [isActive ? 1 : 0, userId]);
+    console.log('🔧 Toggling user status:', { userId, isActive });
+    const result = await query(
+      `UPDATE users SET active_inactive_status = ? WHERE user_id = ?`, 
+      [isActive ? 1 : 0, userId]
+    );
+    console.log('🔧 Update result:', result);
+    return result;
   } catch (error) {
+    console.error('Error in toggleUserStatus:', error);
     throw error;
   }
 }
 
 async function softDeleteUser(userId) {
   try {
-    // Soft delete associated user_roles first
     await query(`UPDATE user_roles SET bit_deleted_flag = 1 WHERE user_id = ?`, [userId]);
-    
-    // Then soft delete the user
+    await query(`UPDATE user_group_assignments SET bit_deleted_flag = 1 WHERE user_id = ?`, [userId]);
     await query(`UPDATE users SET bit_deleted_flag = 1 WHERE user_id = ?`, [userId]);
   } catch (error) {
     throw error;
@@ -67,10 +144,8 @@ async function softDeleteUser(userId) {
 
 async function restoreUser(userId) {
   try {
-    // Restore associated user_roles
     await query(`UPDATE user_roles SET bit_deleted_flag = 0 WHERE user_id = ?`, [userId]);
-    
-    // Then restore the user
+    await query(`UPDATE user_group_assignments SET bit_deleted_flag = 0 WHERE user_id = ?`, [userId]);
     await query(`UPDATE users SET bit_deleted_flag = 0 WHERE user_id = ?`, [userId]);
   } catch (error) {
     throw error;
@@ -79,10 +154,8 @@ async function restoreUser(userId) {
 
 async function hardDeleteUser(userId) {
   try {
-    // Hard delete user_roles (cascade will handle, but explicit for clarity)
     await query(`DELETE FROM user_roles WHERE user_id = ?`, [userId]);
-    
-    // Hard delete the user
+    await query(`DELETE FROM user_group_assignments WHERE user_id = ?`, [userId]);
     await query(`DELETE FROM users WHERE user_id = ?`, [userId]);
   } catch (error) {
     throw error;
@@ -91,7 +164,6 @@ async function hardDeleteUser(userId) {
 
 async function assignRole(userId, companyId, roleId) {
   try {
-    // Check if assignment already exists and is not deleted
     const existing = await query(`
       SELECT id FROM user_roles 
       WHERE user_id = ? AND company_id = ? AND role_id = ? AND bit_deleted_flag = 0
@@ -132,7 +204,7 @@ async function removeRole(userId, companyId, roleId) {
 async function getUserRoles(userId) {
   try {
     const rows = await query(`
-      SELECT r.role_name, c.company_name, ur.company_id, ur.role_id, ur.bit_deleted_flag
+      SELECT r.role_name, c.company_name, ur.company_id, ur.role_id
       FROM user_roles ur
       JOIN roles r ON ur.role_id = r.role_id
       JOIN companies c ON ur.company_id = c.company_id

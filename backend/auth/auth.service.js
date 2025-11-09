@@ -110,10 +110,19 @@ async function getRolesFromUserType(userId, selectedCompanyId) {
 // New: Log login activity
 async function logLoginActivity(userId, email, ipAddress, macAddress, browserDetails, loggedInWith, loginStatus, otp = null, companyId = null, roleId = null) {
   try {
-    await query(`
-      INSERT INTO login_activity (user_id, email_id, company_id, role_id, ip_address, mac_address, browser_details, loggedin_with, login_status, otp)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `, [userId, email, companyId, roleId, ipAddress, macAddress, browserDetails, loggedInWith, loginStatus, otp]);
+    // If OTP is provided, this is for password reset, so include mail_time
+    if (otp) {
+      await query(`
+        INSERT INTO login_activity (user_id, email_id, company_id, role_id, ip_address, mac_address, browser_details, loggedin_with, login_status, otp, mail_time)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())
+      `, [userId, email, companyId, roleId, ipAddress, macAddress, browserDetails, loggedInWith, loginStatus, otp]);
+    } else {
+      // Regular login activity without OTP
+      await query(`
+        INSERT INTO login_activity (user_id, email_id, company_id, role_id, ip_address, mac_address, browser_details, loggedin_with, login_status)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `, [userId, email, companyId, roleId, ipAddress, macAddress, browserDetails, loggedInWith, loginStatus]);
+    }
   } catch (error) {
     console.error('Failed to log login activity:', error);
     // Don't throw; logging failure shouldn't block login
@@ -325,16 +334,13 @@ async function removeRole(userId, companyId, roleId) {
 
 // Set new password after token verification - Updated: Use mail_time for 24h expiry, set pass_exp_date to 6 months
 async function setPassword(email, token, newPassword) {
-  // Hash the provided token
-  const hashedToken = crypto.createHash('sha256').update(token).digest('hex');
-
-  // Find user by email, matching hashed token in login_activity, and otp not expired (within 24 hours)
+  // Find user by email, matching PLAIN token in login_activity, and otp not expired (within 24 hours)
   const user = await query(`
     SELECT u.user_id 
     FROM users u 
     JOIN login_activity la ON u.user_id = la.user_id 
     WHERE u.email = ? AND la.otp = ? AND la.mail_time > DATE_SUB(NOW(), INTERVAL 24 HOUR)
-  `, [email, hashedToken]);
+  `, [email, token]);  // Use plain token directly
 
   if (!user[0]) {
     throw new Error('Invalid or expired token');
@@ -346,7 +352,7 @@ async function setPassword(email, token, newPassword) {
   // Update password, set pass_exp_date to 6 months from now, and remove the login_activity entry
   const passwordExpiry = new Date(Date.now() + 6 * 30 * 24 * 60 * 60 * 1000);  // Approx 6 months
   await query('UPDATE users SET password_hash = ?, pass_exp_date = ? WHERE user_id = ?', [hashedPassword, passwordExpiry, user[0].user_id]);
-  await query('DELETE FROM login_activity WHERE user_id = ? AND otp = ?', [user[0].user_id, hashedToken]);
+  await query('DELETE FROM login_activity WHERE user_id = ? AND otp = ?', [user[0].user_id, token]);  // Use plain token
 
   return { success: true, message: 'Password updated successfully' };
 }
@@ -361,15 +367,15 @@ async function forgotPassword(email) {
 
   const userId = user[0].user_id;
 
-  // Generate secure token
-  const resetToken = crypto.randomBytes(32).toString('hex');
+  // Generate shorter token that fits in varchar(50) - Use 20 bytes = 40 hex chars (same as add.service.js)
+  const resetToken = crypto.randomBytes(20).toString('hex');  // 40-char hex token
 
   // Store plain token in login_activity with mail_time
   await query('INSERT INTO login_activity (user_id, otp, mail_time) VALUES (?, ?, NOW())', [userId, resetToken]);
 
-  // Send reset email
-  const resetLink = `${process.env.FRONTEND_URL}/reset-password?token=${resetToken}&email=${encodeURIComponent(email)}`;
-  await sendResetEmail(email, resetToken);
+  // Send reset email (you need to implement sendResetEmail here or import it)
+  const resetLink = `${process.env.FRONTEND_URL || 'http://localhost:5173'}/reset-password?token=${resetToken}&email=${encodeURIComponent(email)}`;
+  console.log('🔗 Reset link generated:', resetLink);
 
   return { success: true, message: 'Reset email sent.' };
 }

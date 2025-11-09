@@ -2,22 +2,23 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 interface User {
-  _id: string;
+  _id: number | string;
   firstName: string;
   lastName: string;
-  username: string;
+  username?: string;
   email: string;
-  phone_no: string;
-  user_group: string;
-  role: string;
+  phone_no?: string;
+  user_group?: string;
+  role?: string;
   isActive: boolean;
-  lastLogin: string;
-  companies: string;
-  roles: string;
-  userType: string;
-  code: string;
-  companyStatus: string;
-  isDeleted: boolean; // Added for completeness
+  lastLogin?: string | null;
+  companies?: string[]; // backend returns array after normalization
+  roles?: string[];     // backend returns array after normalization
+  userType?: string;
+  code?: string;
+  companyStatus?: string;
+  isDeleted?: boolean;
+  created_at?: string;
 }
 
 const ManageUser: React.FC = () => {
@@ -43,22 +44,42 @@ const ManageUser: React.FC = () => {
   // fetch users
   const fetchUsers = async (page = 1) => {
     try {
+      setIsLoading(true);
+      setError(null);
       const token = localStorage.getItem('token');
+
       if (!token) {
-        navigate('/login'); // Redirect if no token
+        setError('No authentication token found. Please login again.');
+        navigate('/login');
         return;
       }
-      const res = await fetch(`/api/auth/users?page=${page}&limit=${itemsPerPage}`, {
-        headers: { Authorization: `Bearer ${token}` }
+
+      const response = await fetch(`/api/manageuser/users?page=${page}&limit=${itemsPerPage}`, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
       });
-      if (res.status === 401) {
-        // Token expired or invalid, clear and redirect
+
+      if (response.status === 403) {
+        setError('Access denied. You need Admin or Manager privileges to view users.');
+        return;
+      }
+
+      if (response.status === 401) {
+        setError('Session expired. Please login again.');
         localStorage.removeItem('token');
         navigate('/login');
         return;
       }
-      if (!res.ok) throw new Error('Failed to fetch users');
-      const data = await res.json();
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
+      // expect backend to return normalized fields: users (array) and total (number)
       setUsers(data.users || []);
       setTotal(data.total || 0);
     } catch (err: any) {
@@ -113,7 +134,7 @@ const ManageUser: React.FC = () => {
         case 'isActive':
           return u.isActive ? 1 : 0;
         case 'role':
-          return u.role || '';
+          return (u.role || '').toLowerCase();
         default:
           return '';
       }
@@ -139,23 +160,23 @@ const ManageUser: React.FC = () => {
       setSortColumn(column);
       setSortDirection('asc');
     }
-    // Note: Sorting is client-side; for server-side, would need to refetch with sort params
   };
 
   // pagination
   const totalPages = Math.max(1, Math.ceil(total / itemsPerPage));
   const startIndex = (currentPage - 1) * itemsPerPage;
-  const paginated = filteredAndSorted.slice(0, itemsPerPage); // Since server sends only current page, but filtered client-side
+  // server returns page contents; use the filteredAndSorted array directly for rendering
+  const paginated = filteredAndSorted;
 
   // actions
-  const toggleUserStatus = async (userId: string, currentStatus: boolean) => {
+  const toggleUserStatus = async (userId: string | number, currentStatus: boolean) => {
     try {
       const token = localStorage.getItem('token');
       if (!token) {
         navigate('/login');
         return;
       }
-      const res = await fetch(`/api/auth/users/${userId}/status`, {
+      const res = await fetch(`/api/manageuser/users/${userId}/status`, {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
@@ -175,7 +196,7 @@ const ManageUser: React.FC = () => {
     }
   };
 
-  const deleteUser = async (userId: string, userName: string) => {
+  const deleteUser = async (userId: string | number, userName: string) => {
     if (!confirm(`Delete ${userName}?`)) return;
     try {
       const token = localStorage.getItem('token');
@@ -183,7 +204,7 @@ const ManageUser: React.FC = () => {
         navigate('/login');
         return;
       }
-      const res = await fetch(`/api/auth/users/${userId}`, {
+      const res = await fetch(`/api/manageuser/users/${userId}`, {
         method: 'DELETE',
         headers: { Authorization: `Bearer ${token}` }
       });
@@ -199,21 +220,20 @@ const ManageUser: React.FC = () => {
     }
   };
 
-  // New function to resend reset email
-  const resendResetEmail = async (userId: string, userEmail: string) => {
+  const resendResetEmail = async (userId: string | number, userEmail: string) => {
     try {
       const token = localStorage.getItem('token');
       if (!token) {
         navigate('/login');
         return;
       }
-      const res = await fetch(`/api/auth/users/${userId}/resend-reset`, {
+      const res = await fetch(`/api/manageuser/users/${userId}/resend-reset`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`
         },
-        body: JSON.stringify({ email: userEmail }) // Optional, if backend needs email
+        body: JSON.stringify({ email: userEmail })
       });
       if (res.status === 401) {
         localStorage.removeItem('token');
@@ -333,115 +353,33 @@ const ManageUser: React.FC = () => {
               <thead className="bg-gray-50 border-b border-gray-200">
                 <tr>
                   <th className="px-3 py-2 text-left uppercase text-[11px] tracking-wide text-gray-600">#</th>
-
-                  <th
-                    role="button"
-                    aria-sort={sortColumn === 'name' ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'}
-                    onClick={() => handleSort('name')}
-                    className="px-3 py-2 text-left uppercase text-[11px] tracking-wide text-gray-600 cursor-pointer select-none"
-                  >
-                    <span className="flex items-center justify-between w-full">
-                      <span>Name</span>
-                      <span>{sortIcon('name')}</span>
-                    </span>
+                  <th role="button" aria-sort={sortColumn === 'name' ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'} onClick={() => handleSort('name')} className="px-3 py-2 text-left uppercase text-[11px] tracking-wide text-gray-600 cursor-pointer select-none">
+                    <span className="flex items-center justify-between w-full"><span>Name</span><span>{sortIcon('name')}</span></span>
                   </th>
-
-                  <th
-                    role="button"
-                    aria-sort={sortColumn === 'email' ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'}
-                    onClick={() => handleSort('email')}
-                    className="px-3 py-2 text-left uppercase text-[11px] tracking-wide text-gray-600 cursor-pointer select-none"
-                  >
-                    <span className="flex items-center justify-between w-full">
-                      <span>Email</span>
-                      <span>{sortIcon('email')}</span>
-                    </span>
+                  <th role="button" aria-sort={sortColumn === 'email' ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'} onClick={() => handleSort('email')} className="px-3 py-2 text-left uppercase text-[11px] tracking-wide text-gray-600 cursor-pointer select-none">
+                    <span className="flex items-center justify-between w-full"><span>Email</span><span>{sortIcon('email')}</span></span>
                   </th>
-
-                  <th
-                    role="button"
-                    aria-sort={sortColumn === 'phone_no' ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'}
-                    onClick={() => handleSort('phone_no')}
-                    className="px-3 py-2 text-left uppercase text-[11px] tracking-wide text-gray-600 cursor-pointer select-none"
-                  >
-                    <span className="flex items-center justify-between w-full">
-                      <span>Phone No.</span>
-                      <span>{sortIcon('phone_no')}</span>
-                    </span>
+                  <th role="button" aria-sort={sortColumn === 'phone_no' ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'} onClick={() => handleSort('phone_no')} className="px-3 py-2 text-left uppercase text-[11px] tracking-wide text-gray-600 cursor-pointer select-none">
+                    <span className="flex items-center justify-between w-full"><span>Phone No.</span><span>{sortIcon('phone_no')}</span></span>
                   </th>
-
-                  <th
-                    role="button"
-                    aria-sort={sortColumn === 'userType' ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'}
-                    onClick={() => handleSort('userType')}
-                    className="px-3 py-2 text-left uppercase text-[11px] tracking-wide text-gray-600 cursor-pointer select-none"
-                  >
-                    <span className="flex items-center justify-between w-full">
-                      <span>User Type</span>
-                      <span>{sortIcon('userType')}</span>
-                    </span>
+                  <th role="button" aria-sort={sortColumn === 'userType' ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'} onClick={() => handleSort('userType')} className="px-3 py-2 text-left uppercase text-[11px] tracking-wide text-gray-600 cursor-pointer select-none">
+                    <span className="flex items-center justify-between w-full"><span>User Type</span><span>{sortIcon('userType')}</span></span>
                   </th>
-
-                  <th
-                    role="button"
-                    aria-sort={sortColumn === 'user_group' ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'}
-                    onClick={() => handleSort('user_group')}
-                    className="px-3 py-2 text-left uppercase text-[11px] tracking-wide text-gray-600 cursor-pointer select-none"
-                  >
-                    <span className="flex items-center justify-between w-full">
-                      <span>User Group</span>
-                      <span>{sortIcon('user_group')}</span>
-                    </span>
+                  <th role="button" aria-sort={sortColumn === 'user_group' ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'} onClick={() => handleSort('user_group')} className="px-3 py-2 text-left uppercase text-[11px] tracking-wide text-gray-600 cursor-pointer select-none">
+                    <span className="flex items-center justify-between w-full"><span>User Group</span><span>{sortIcon('user_group')}</span></span>
                   </th>
-
-                  <th
-                    role="button"
-                    aria-sort={sortColumn === 'code' ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'}
-                    onClick={() => handleSort('code')}
-                    className="px-3 py-2 text-left uppercase text-[11px] tracking-wide text-gray-600 cursor-pointer select-none"
-                  >
-                    <span className="flex items-center justify-between w-full">
-                      <span>Code</span>
-                      <span>{sortIcon('code')}</span>
-                    </span>
+                  <th role="button" aria-sort={sortColumn === 'code' ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'} onClick={() => handleSort('code')} className="px-3 py-2 text-left uppercase text-[11px] tracking-wide text-gray-600 cursor-pointer select-none">
+                    <span className="flex items-center justify-between w-full"><span>Code</span><span>{sortIcon('code')}</span></span>
                   </th>
-
-                  <th
-                    role="button"
-                    aria-sort={sortColumn === 'companyStatus' ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'}
-                    onClick={() => handleSort('companyStatus')}
-                    className="px-3 py-2 text-left uppercase text-[11px] tracking-wide text-gray-600 cursor-pointer select-none"
-                  >
-                    <span className="flex items-center justify-between w-full">
-                      <span>Company Status</span>
-                      <span>{sortIcon('companyStatus')}</span>
-                    </span>
+                  <th role="button" aria-sort={sortColumn === 'companyStatus' ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'} onClick={() => handleSort('companyStatus')} className="px-3 py-2 text-left uppercase text-[11px] tracking-wide text-gray-600 cursor-pointer select-none">
+                    <span className="flex items-center justify-between w-full"><span>Company Status</span><span>{sortIcon('companyStatus')}</span></span>
                   </th>
-
-                  <th
-                    role="button"
-                    aria-sort={sortColumn === 'isActive' ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'}
-                    onClick={() => handleSort('isActive')}
-                    className="px-3 py-2 text-left uppercase text-[11px] tracking-wide text-gray-600 cursor-pointer select-none"
-                  >
-                    <span className="flex items-center justify-between w-full">
-                      <span>User Status</span>
-                      <span>{sortIcon('isActive')}</span>
-                    </span>
+                  <th role="button" aria-sort={sortColumn === 'isActive' ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'} onClick={() => handleSort('isActive')} className="px-3 py-2 text-left uppercase text-[11px] tracking-wide text-gray-600 cursor-pointer select-none">
+                    <span className="flex items-center justify-between w-full"><span>User Status</span><span>{sortIcon('isActive')}</span></span>
                   </th>
-
-                  <th
-                    role="button"
-                    aria-sort={sortColumn === 'role' ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'}
-                    onClick={() => handleSort('role')}
-                    className="px-3 py-2 text-left uppercase text-[11px] tracking-wide text-gray-600 cursor-pointer select-none"
-                  >
-                    <span className="flex items-center justify-between w-full">
-                      <span>Role</span>
-                      <span>{sortIcon('role')}</span>
-                    </span>
+                  <th role="button" aria-sort={sortColumn === 'role' ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'} onClick={() => handleSort('role')} className="px-3 py-2 text-left uppercase text-[11px] tracking-wide text-gray-600 cursor-pointer select-none">
+                    <span className="flex items-center justify-between w-full"><span>Role</span><span>{sortIcon('role')}</span></span>
                   </th>
-
                   <th className="px-3 py-2 text-center uppercase text-[11px] tracking-wide text-gray-600">Action</th>
                 </tr>
               </thead>

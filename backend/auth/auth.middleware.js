@@ -37,6 +37,9 @@ async function authenticateJWT(req, res, next) {
       // Removed userType and role as they don't exist in the new schema
     };
 
+    // Add this debug log
+    console.log('🔧 Authenticated user roles:', req.user.userTypes);
+    
     next();
   } catch (err) {
     console.error('JWT middleware error:', err);

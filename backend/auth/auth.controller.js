@@ -1,4 +1,5 @@
 const jwt = require('jsonwebtoken');
+const { query } = require('../config/db');  // Add this import
 const { 
   login, 
   selectRole, 
@@ -168,6 +169,77 @@ const getCompaniesForEmail = async (req, res) => {
   }
 };
 
+// Fix the getUsersList function
+const getUsersList = async (queryParams) => {
+  try {
+    const page = parseInt(queryParams.page) || 1;
+    const limit = parseInt(queryParams.limit) || 10;
+    
+    // Validate inputs to prevent SQL injection
+    if (page < 1 || limit < 1 || limit > 100) {
+      throw new Error('Invalid pagination parameters');
+    }
+    
+    const offset = (page - 1) * limit;
+
+    // Get total count
+    const countResult = await query('SELECT COUNT(*) as total FROM users WHERE bit_deleted_flag = 0');
+    const totalUsers = countResult[0].total;
+
+    // Get users with pagination - use template literals for LIMIT/OFFSET
+    const users = await query(`
+      SELECT 
+        user_id as _id,
+        first_name,
+        last_name,
+        email,
+        phone_no,
+        active_inactive_status,
+        created_at
+      FROM users 
+      WHERE bit_deleted_flag = 0
+      ORDER BY created_at DESC
+      LIMIT ${limit} OFFSET ${offset}
+    `);  // No parameters array needed
+
+    return {
+      success: true,
+      users: users,
+      totalUsers: totalUsers,
+      currentPage: page,
+      totalPages: Math.ceil(totalUsers / limit)
+    };
+  } catch (error) {
+    console.error('Error in getUsersList:', error);
+    throw error;
+  }
+};
+
+// Add this function after getUsersList
+
+// Update user status
+const updateUserStatus = async (userId, status) => {
+  try {
+    // Check if user exists
+    const userCheck = await query('SELECT user_id FROM users WHERE user_id = ?', [userId]);
+    if (userCheck.length === 0) {
+      throw new Error('User not found');
+    }
+
+    // Update status
+    await query('UPDATE users SET active_inactive_status = ? WHERE user_id = ?', [status, userId]);
+
+    return {
+      success: true,
+      message: `User status updated to ${status === 1 ? 'active' : 'inactive'}`
+    };
+  } catch (error) {
+    console.error('Error updating user status:', error);
+    throw error;
+  }
+};
+
+// Add to module.exports
 module.exports = {
   validateLogin,
   handleLogin,
@@ -176,5 +248,7 @@ module.exports = {
   getUserRoles,
   assignUserRole,
   removeUserRole,
-  getCompaniesForEmail  // Added
+  getCompaniesForEmail,
+  getUsersList,
+  updateUserStatus  // Add this
 };

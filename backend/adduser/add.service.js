@@ -72,7 +72,7 @@ async function getCompanies() {
 async function checkUserRoleExists(userId, companyId, roleName) {
   try {
     const rows = await query(`
-      SELECT ur.user_role_id 
+      SELECT ur.id 
       FROM user_roles ur
       JOIN roles r ON ur.role_id = r.role_id
       WHERE ur.user_id = ? AND ur.company_id = ? AND r.role_name = ? AND ur.bit_deleted_flag = 0
@@ -89,7 +89,6 @@ async function checkUserRoleExists(userId, companyId, roleName) {
 async function createUser(payload) {
   const { companyId, existingUserId, firstName, lastName, email, confirmEmail, phoneNo, role, userGroup, isActive } = payload;
 
-  let userData;
   let userId;
   
   if (existingUserId) {
@@ -105,18 +104,11 @@ async function createUser(payload) {
       throw new Error(`User already has the role "${role}" in this company. Please select a different role or user.`);
     }
     
-    userData = {
-      first_name: user[0].first_name,
-      last_name: user[0].last_name,
-      email: user[0].email,
-      phone_no: user[0].phone_no,
-      user_group: JSON.stringify(userGroup || []),
-      active_inactive_status: isActive ? 1 : 0
-    };
-    
-    // Update existing user's group and status
-    await query('UPDATE users SET user_group = ?, active_inactive_status = ? WHERE user_id = ?', 
-      [userData.user_group, userData.active_inactive_status, userId]);
+    // Update existing user's group and status using correct column names
+    await query(
+      'UPDATE users SET user_group = ?, active_inactive_status = ? WHERE user_id = ?', 
+      [JSON.stringify(userGroup || []), isActive ? 1 : 0, userId]
+    );
       
   } else {
     // Creating new user
@@ -130,19 +122,28 @@ async function createUser(payload) {
       throw new Error('User with this email already exists. Please use the existing user option or choose a different email.');
     }
     
-    userData = {
-      first_name: firstName,
-      last_name: lastName,
+    // Insert new user using correct column names (created_at instead of created_date)
+    const result = await query(`
+      INSERT INTO users (
+        first_name, 
+        last_name, 
+        email, 
+        phone_no, 
+        user_group, 
+        active_inactive_status, 
+        bit_deleted_flag, 
+        created_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, NOW())
+    `, [
+      firstName,
+      lastName, 
       email,
-      phone_no: phoneNo,
-      user_group: JSON.stringify(userGroup || []),
-      active_inactive_status: isActive ? 1 : 0,
-      bit_deleted_flag: 0,
-      created_date: new Date()
-    };
-
-    // Insert new user
-    const result = await query('INSERT INTO users SET ?', [userData]);
+      phoneNo || '',
+      JSON.stringify(userGroup || []),
+      isActive ? 1 : 0,
+      0
+    ]);
+    
     userId = result.insertId;
   }
 
@@ -151,48 +152,97 @@ async function createUser(payload) {
   if (!roleRow[0]) throw new Error(`Role "${role}" not found`);
   const roleId = roleRow[0].role_id;
 
-  // Insert into user_roles
-  await query('INSERT INTO user_roles (user_id, company_id, role_id, bit_deleted_flag, created_date) VALUES (?, ?, ?, 0, NOW())', 
-    [userId, companyId, roleId]);
+  // Insert into user_roles using correct column names (assigned_at instead of created_date)
+  await query(`
+    INSERT INTO user_roles (user_id, company_id, role_id, bit_deleted_flag, assigned_at) 
+    VALUES (?, ?, ?, ?, NOW())
+  `, [userId, companyId, roleId, 0]);
 
-  // Generate secure token using crypto (random bytes)
-  const resetToken = crypto.randomBytes(32).toString('hex');  // 64-char hex token (random)
+  // Generate shorter token that fits in varchar(50) - Use 20 bytes = 40 hex chars
+  const resetToken = crypto.randomBytes(20).toString('hex');  // 40-char hex token (fits in varchar(50))
+  console.log('🔧 Generated reset token:', resetToken);
 
-  // Store plain token in login_activity.otp (no hashing)
+  // Store plain token in login_activity.otp
   await query('INSERT INTO login_activity (user_id, otp, mail_time) VALUES (?, ?, NOW())', [userId, resetToken]);
+  console.log('✅ Token stored in login_activity table');
 
   // Send reset email with plain token in link
-  await sendResetEmail(userData.email, resetToken);
+  const userEmail = existingUserId ? 
+    (await query('SELECT email FROM users WHERE user_id = ?', [userId]))[0].email : 
+    email;
+
+  console.log('🔧 Sending email to:', userEmail);
+
+  try {
+    await sendResetEmail(userEmail, resetToken);
+    console.log('✅ Reset email sent successfully');
+  } catch (emailError) {
+    console.error('❌ Failed to send email, but user was created:', emailError);
+    // Don't fail the entire operation if email fails
+    // The user is still created, they just won't get the email
+  }
 
   return { 
     success: true, 
     message: existingUserId ? 
-      'User role assigned successfully. Reset email sent.' : 
-      'User created successfully. Reset email sent.' 
+      'User role assigned successfully. Please check the console for the password reset link.' : 
+      'User created successfully. Please check the console for the password reset link.'
   };
 }
 
 // Send reset email
 async function sendResetEmail(email, token) {
-  const transporter = nodemailer.createTransport({
-    host: 'smtp.ethereal.email',
-    port: 587,
-    auth: {
-      user: 'adam.schowalter@ethereal.email',
-      pass: 'gAhPqGRgmhkUjCMSUw'
-    }
-  });
+  try {
+    console.log('🔧 Attempting to send email to:', email);
+    console.log('🔧 Token generated:', token);
+    
+    // FIXED: Use createTransport (not createTransporter)
+    const transporter = nodemailer.createTransport({
+      host: process.env.EMAIL_HOST || 'smtp.ethereal.email',
+      port: process.env.EMAIL_PORT || 587,
+      auth: {
+        user: process.env.EMAIL_USER || 'georgette.morar@ethereal.email',
+        pass: process.env.EMAIL_PASS || 'x2bWREhY2DSf6kU12G'
+      }
+    });
 
-  const resetLink = `${process.env.FRONTEND_URL}/reset-password?token=${token}`;
+    // Use port 5173 to match your frontend (like in mail-test.js)
+    const resetLink = `http://localhost:5173/reset-password?token=${token}&email=${encodeURIComponent(email)}`;
+    console.log('🔧 Reset link generated:', resetLink);
 
-  const mailOptions = {
-    from: 'adam.schowalter@ethereal.email',
-    to: email,
-    subject: 'Create Your Password',
-    html: `<p>Click <a href="${resetLink}">here</a> to create your password. Link expires in 24 hours.</p>`
-  };
+    const mailOptions = {
+      from: process.env.EMAIL_USER || 'georgette.morar@ethereal.email',
+      to: email,
+      subject: 'Create Your Password - Action Required',
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+          <h2>Welcome! Create Your Password</h2>
+          <p>A user account has been created for you. Please click the button below to set your password:</p>
+          <div style="text-align: center; margin: 20px 0;">
+            <a href="${resetLink}" style="background-color: #4F46E5; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; display: inline-block;">
+              Set My Password
+            </a>
+          </div>
+          <p><strong>Note:</strong> This link expires in 24 hours.</p>
+          <p>If the button doesn't work, copy and paste this link into your browser:</p>
+          <p style="word-break: break-all; color: #6B7280;">${resetLink}</p>
+        </div>
+      `
+    };
 
-  await transporter.sendMail(mailOptions);
+    const info = await transporter.sendMail(mailOptions);
+    console.log('✅ Email sent successfully!');
+    console.log('📧 Message ID:', info.messageId);
+    
+    // Use SAME logging as mail-test.js
+    const previewUrl = nodemailer.getTestMessageUrl(info);
+    console.log('🔗 Preview URL (Ethereal):', previewUrl);
+    
+    return info;
+  } catch (error) {
+    console.error('❌ Email sending failed:', error);
+    throw new Error(`Failed to send email: ${error.message}`);
+  }
 }
 
 // Set new password after token verification - Updated: No hashing, match plain token
@@ -225,6 +275,6 @@ module.exports = {
   getUserGroups,
   getUsers,
   getCompanies,
-  getRoles,  // Add this export
+  getRoles,
   setPassword
 };

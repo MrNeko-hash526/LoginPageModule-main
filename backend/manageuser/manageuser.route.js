@@ -10,30 +10,20 @@ const {
   assignUserRole,
   removeUserRole
 } = require('./manageuser.controller');
-const { authenticateJWT, requireAdmin, canManageUser } = require('./manageuser.middleware');
+const { authenticateJWT, requireAdmin, canManageUser, requireAdminOrManager } = require('./manageuser.middleware');
 
-// Get all users (admin only)
-router.get('/users', authenticateJWT, requireAdmin, getUsers);
+// Get all users (allow Manager or Admin to view)
+router.get('/users', authenticateJWT, requireAdminOrManager, getUsers);
 
-// Toggle user active/inactive status (admin only, cannot manage self)
-router.patch('/users/:id/status', authenticateJWT, requireAdmin, canManageUser, updateUserStatus);
+// Toggle user active/inactive status (allow Manager or Admin)
+router.patch('/users/:id/status', authenticateJWT, requireAdminOrManager, canManageUser, updateUserStatus);
 
-// Soft delete a user (admin only, cannot manage self)
+// Keep other routes admin-only or adjust as needed
 router.delete('/users/:id', authenticateJWT, requireAdmin, canManageUser, softDeleteUser);
-
-// Restore a soft-deleted user (admin only)
 router.patch('/users/:id/restore', authenticateJWT, requireAdmin, restoreUser);
-
-// Hard delete a user (admin only, cannot manage self)
 router.delete('/users/:id/hard', authenticateJWT, requireAdmin, canManageUser, hardDeleteUser);
-
-// Get all roles for a specific user (admin only)
 router.get('/users/:id/roles', authenticateJWT, requireAdmin, getUserRoles);
-
-// Assign a role to a user (admin only)
 router.post('/users/:id/roles', authenticateJWT, requireAdmin, assignUserRole);
-
-// Remove a role from a user (admin only)
 router.delete('/users/:id/roles/:roleId', authenticateJWT, requireAdmin, removeUserRole);
 
 module.exports = router;
