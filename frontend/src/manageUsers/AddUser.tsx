@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import * as yup from 'yup';
 
 interface UserGroup { id: string; name: string; }
@@ -25,6 +25,8 @@ interface Toast {
 
 const AddUser: React.FC = () => {
   const navigate = useNavigate();
+  const { id } = useParams<{ id: string }>();
+  const location = useLocation();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [users, setUsers] = useState<User[]>([]);
   const [companies, setCompanies] = useState<Company[]>([]);
@@ -122,6 +124,10 @@ const AddUser: React.FC = () => {
     </div>
   );
 
+  const isEdit = !!id && !location.pathname.includes('view');
+  const isView = !!id && location.pathname.includes('view');
+  const isAdd = !id;
+
   useEffect(() => {
     const token = localStorage.getItem('token');
     if (!token) {
@@ -133,7 +139,10 @@ const AddUser: React.FC = () => {
     fetchCompanies();
     fetchUserGroups();
     fetchRoles();
-  }, [navigate]);
+    if (id) {
+      fetchUser(id);
+    }
+  }, [navigate, id]);
 
   // Update the click outside handler to be more specific
   useEffect(() => {
@@ -242,6 +251,79 @@ const AddUser: React.FC = () => {
     }
   };
 
+  const fetchUser = async (userId: string) => {
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) {
+        showToast('Authentication required. Please login.', 'error');
+        navigate('/login');
+        return;
+      }
+
+      console.debug('[fetchUser] Fetching user with ID:', userId);
+
+      // First, try to get the user from the users list endpoint
+      // This is the same endpoint that works in ManageUser.tsx
+      const response = await fetch('/api/manageuser/users', {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (response.status === 401) {
+        localStorage.removeItem('token');
+        navigate('/login');
+        return;
+      }
+
+      if (response.status === 403) {
+        showToast('Access denied. You need proper privileges to view user details.', 'error');
+        return;
+      }
+
+      if (!response.ok) {
+        throw new Error(`Failed to fetch users: ${response.status}`);
+      }
+
+      const data = await response.json();
+      const users = data.users || [];
+      
+      // Find the specific user by ID
+      const user = users.find((u: any) => 
+        u._id?.toString() === userId.toString() || 
+        u.id?.toString() === userId.toString()
+      );
+
+      if (!user) {
+        showToast('User not found', 'error');
+        return;
+      }
+
+      console.debug('[fetchUser] Found user:', user);
+
+      // Map the user data to form structure
+      setFormData({
+        companyId: user.companyId || user.company || '',
+        existingUserId: '',
+        firstName: user.firstName || '',
+        lastName: user.lastName || '',
+        email: user.email || '',
+        confirmEmail: user.email || '',
+        phoneNo: user.phone_no || user.phoneNo || '',
+        role: user.role || '',
+        userGroup: user.user_group ? (Array.isArray(user.user_group) ? user.user_group : [user.user_group]) : [],
+        isActive: typeof user.isActive === 'boolean' ? user.isActive : false
+      });
+
+      showToast('User data loaded successfully', 'success');
+    } catch (error) {
+      console.error('[fetchUser] error:', error);
+      showToast('Failed to load user data. Please try again.', 'error');
+    }
+  };
+
   const handleExistingUserChange = (userId: string) => {
     if (!userId) return;
     
@@ -300,17 +382,54 @@ const AddUser: React.FC = () => {
     e.preventDefault();
     setErrors({});
     try {
-      const isExisting = formData.existingUserId.trim() !== '';
-      const schema = isExisting ? existingUserSchema : newUserSchema;
-      const validated = await schema.validate(formData, { abortEarly: false });
+      let validated;
+      
+      if (isEdit) {
+        // For edit mode, use a modified schema (email confirmation not required)
+        const editUserSchema = yup.object().shape({
+          firstName: yup.string().required('First name is required'),
+          lastName: yup.string().required('Last name is required'),
+          email: yup.string().email('Invalid email').required('Email is required'),
+          phoneNo: yup.string().required('Phone is required').matches(/^\d{10}$/, 'Must be 10 digits'),
+          role: yup.string().required('Role is required'),
+          userGroup: yup.array().min(1, 'At least one user group is required'),
+          isActive: yup.boolean()
+        });
+        
+        validated = await editUserSchema.validate(formData, { abortEarly: false });
+      } else {
+        const isExisting = formData.existingUserId.trim() !== '';
+        const schema = isExisting ? existingUserSchema : newUserSchema;
+        validated = await schema.validate(formData, { abortEarly: false });
+      }
 
       setIsSubmitting(true);
-      showToast('Creating user...', 'info');
+      showToast(isEdit ? 'Updating user...' : 'Creating user...', 'info');
       
       const token = localStorage.getItem('token');
 
       let payload: any;
-      if (isExisting) {
+      let method: string;
+      let url: string;
+
+      if (isEdit) {
+        // For edit mode, use the status update endpoint or create a new update endpoint
+        method = 'PATCH'; // or 'PUT' if you create a full update endpoint
+        url = `/api/manageuser/users/${id}/update`; // You might need to create this endpoint
+        
+        payload = {
+          firstName: formData.firstName,
+          lastName: formData.lastName,
+          email: formData.email,
+          phone_no: formData.phoneNo,
+          role: formData.role,
+          user_group: formData.userGroup,
+          isActive: formData.isActive,
+          companyId: formData.companyId
+        };
+      } else if (formData.existingUserId.trim() !== '') {
+        method = 'POST';
+        url = '/api/adduser/create-user';
         const v = validated as ExistingUserForm;
         payload = {
           companyId: v.companyId,
@@ -319,6 +438,8 @@ const AddUser: React.FC = () => {
           isActive: v.isActive
         };
       } else {
+        method = 'POST';
+        url = '/api/adduser/create-user';
         const v = validated as NewUserForm;
         payload = {
           companyId: v.companyId,
@@ -333,18 +454,27 @@ const AddUser: React.FC = () => {
         };
       }
 
-      const res = await fetch('/api/adduser/create-user', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      const res = await fetch(url, {
+        method,
+        headers: { 
+          'Content-Type': 'application/json', 
+          Authorization: `Bearer ${token}` 
+        },
         body: JSON.stringify(payload)
       });
       
-      const result = await res.json();
-      if (!res.ok) {
-        throw new Error(result.message || 'Failed to create user');
+      if (res.status === 404 && isEdit) {
+        // If update endpoint doesn't exist, show a message
+        showToast('Update functionality not available. Contact administrator.', 'error');
+        return;
       }
       
-      showToast(result.message || 'User created successfully!', 'success');
+      const result = await res.json();
+      if (!res.ok) {
+        throw new Error(result.message || `Failed to ${isEdit ? 'update' : 'create'} user`);
+      }
+      
+      showToast(result.message || `User ${isEdit ? 'updated' : 'created'} successfully!`, 'success');
       
       // Navigate after a short delay to allow user to see the success message
       setTimeout(() => {
@@ -358,7 +488,7 @@ const AddUser: React.FC = () => {
         setErrors(obj);
         showToast('Please fix the validation errors', 'error');
       } else {
-        showToast(err.message || 'An error occurred while creating user', 'error');
+        showToast(err.message || `An error occurred while ${isEdit ? 'updating' : 'creating'} user`, 'error');
       }
     } finally {
       setIsSubmitting(false);
@@ -385,19 +515,25 @@ const AddUser: React.FC = () => {
   const clearError = (field: string) => errors[field] && setErrors({ ...errors, [field]: '' });
 
   return (
-    <div className="min-h-screen bg-gray-50 p-4">
+    <div className="min-h-screen bg-gray-700 p-4">
       {/* Toast Container */}
       <ToastContainer />
       
       <div className="max-w-5xl mx-auto">
         {/* Header */}
-        <div className="bg-white border border-gray-200 rounded-md shadow-sm p-4 mb-4">
+        <div className="bg-gray-400 border border-gray-300 rounded-md shadow-sm p-4 mb-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <div className="w-8 h-8 bg-gray-800 rounded-full flex items-center justify-center text-white text-sm font-bold">AU</div>
+              <div className="w-8 h-8 bg-gray-800 rounded-full flex items-center justify-center text-white text-sm font-bold">
+                {isView ? 'VU' : isEdit ? 'EU' : 'AU'}
+              </div>
               <div>
-                <h1 className="text-lg font-semibold text-gray-900">Register User</h1>
-                <p className="text-xs text-gray-600">Add a new user with role and groups</p>
+                <h1 className="text-lg font-semibold text-gray-900">
+                  {isView ? 'View User' : isEdit ? 'Edit User' : 'Register User'}
+                </h1>
+                <p className="text-xs text-gray-600">
+                  {isView ? 'View user details' : isEdit ? 'Edit user details' : 'Add a new user with role and groups'}
+                </p>
               </div>
             </div>
             <button
@@ -410,89 +546,95 @@ const AddUser: React.FC = () => {
         </div>
 
         {/* Form */}
-        <div className="bg-white border border-gray-200 rounded-md shadow-sm overflow-hidden">
-          <div className="bg-gray-100 px-4 py-3 border-b border-gray-200">
-            <h2 className="text-sm font-semibold text-gray-800">User Details</h2>
+        <div className="bg-gray-400 border border-gray-500 rounded-md shadow-sm overflow-hidden">
+          <div className="bg-gray-600 px-4 py-3 border-b border-gray-500">
+            <h2 className="text-sm font-semibold text-white">User Details</h2>
           </div>
 
-          <form onSubmit={handleSubmit} className="p-4" noValidate>
-            {/* Row 1: Company, Existing Users */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-xs font-semibold text-gray-700 mb-1">Company: <span className="text-red-600">*</span></label>
-                <select
-                  value={formData.companyId}
-                  onChange={(e) => { setFormData({ ...formData, companyId: e.target.value }); clearError('companyId'); }}
-                  className="w-full border border-gray-300 rounded px-3 py-2 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-gray-500"
-                >
-                  <option value="">Select Company</option>
-                  {companies.map(c => (
-                    <option key={c.id} value={c.id}>{c.name}</option>
-                  ))}
-                </select>
-                {errors.companyId && <p className="text-red-600 text-xs mt-1">{errors.companyId}</p>}
-              </div>
+          <form onSubmit={isView ? (e) => e.preventDefault() : handleSubmit} className="px-4 pt-4" noValidate>
+            {/* Row 1: Company, Existing Users - Hide for edit/view */}
+            {!isEdit && !isView && (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-semibold text-white mb-1">Company: <span className="text-red-600">*</span></label>
+                  <select
+                    value={formData.companyId}
+                    onChange={(e) => { setFormData({ ...formData, companyId: e.target.value }); clearError('companyId'); }}
+                    className="w-full border border-gray-600 rounded px-3 py-2 bg-gray-300 text-gray-900 text-sm focus:outline-none focus:ring-2 focus:ring-gray-500"
+                    disabled={isView}
+                  >
+                    <option value="">Select Company</option>
+                    {companies.map(c => (
+                      <option key={c.id} value={c.id}>{c.name}</option>
+                    ))}
+                  </select>
+                  {errors.companyId && <p className="text-red-600 text-xs mt-1">{errors.companyId}</p>}
+                </div>
 
-              <div>
-                <label className="block text-xs font-semibold text-gray-700 mb-1">Existing Users:</label>
-                <select
-                  value={formData.existingUserId}
-                  onChange={(e) => handleExistingUserChange(e.target.value)}
-                  className="w-full border border-gray-300 rounded px-3 py-2 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-gray-500"
-                >
-                  <option value="">Select Existing User</option>
-                  {users.map(u => (
-                    <option key={u._id || u.id} value={u._id || u.id}>
-                      {`${u.firstName} ${u.lastName}`}
-                    </option>
-                  ))}
-                </select>
+                <div>
+                  <label className="block text-xs font-semibold text-white mb-1">Existing Users:</label>
+                  <select
+                    value={formData.existingUserId}
+                    onChange={(e) => handleExistingUserChange(e.target.value)}
+                    className="w-full border border-gray-600 rounded px-3 py-2 bg-gray-300 text-gray-900 text-sm focus:outline-none focus:ring-2 focus:ring-gray-500"
+                    disabled={isView}
+                  >
+                    <option value="">Select Existing User</option>
+                    {users.map(u => (
+                      <option key={u._id || u.id} value={u._id || u.id}>
+                        {`${u.firstName} ${u.lastName}`}
+                      </option>
+                    ))}
+                  </select>
+                </div>
               </div>
-            </div>
+            )}
 
-            {/* Read-only fields for existing user */}
-            {formData.existingUserId && (
+            {/* Read-only fields for existing user - Hide for edit/view */}
+            {formData.existingUserId && !isEdit && !isView && (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
                 <div>
-                  <label className="block text-xs font-semibold text-gray-700 mb-1">First Name:</label>
-                  <input type="text" value={formData.firstName} readOnly className="w-full border border-gray-300 rounded px-3 py-2 bg-gray-100 text-sm" />
+                  <label className="block text-xs font-semibold text-white mb-1">First Name:</label>
+                  <input type="text" value={formData.firstName} readOnly className="w-full border border-gray-600 rounded px-3 py-2 bg-gray-200 text-gray-900 text-sm" />
                 </div>
                 <div>
-                  <label className="block text-xs font-semibold text-gray-700 mb-1">Last Name:</label>
-                  <input type="text" value={formData.lastName} readOnly className="w-full border border-gray-300 rounded px-3 py-2 bg-gray-100 text-sm" />
+                  <label className="block text-xs font-semibold text-white mb-1">Last Name:</label>
+                  <input type="text" value={formData.lastName} readOnly className="w-full border border-gray-600 rounded px-3 py-2 bg-gray-200 text-gray-900 text-sm" />
                 </div>
                 <div>
-                  <label className="block text-xs font-semibold text-gray-700 mb-1">Email:</label>
-                  <input type="email" value={formData.email} readOnly className="w-full border border-gray-300 rounded px-3 py-2 bg-gray-100 text-sm" />
+                  <label className="block text-xs font-semibold text-white mb-1">Email:</label>
+                  <input type="email" value={formData.email} readOnly className="w-full border border-gray-600 rounded px-3 py-2 bg-gray-200 text-gray-900 text-sm" />
                 </div>
                 <div>
-                  <label className="block text-xs font-semibold text-gray-700 mb-1">Phone Number:</label>
-                  <input type="text" value={formData.phoneNo} readOnly className="w-full border border-gray-300 rounded px-3 py-2 bg-gray-100 text-sm" />
+                  <label className="block text-xs font-semibold text-white mb-1">Phone Number:</label>
+                  <input type="text" value={formData.phoneNo} readOnly className="w-full border border-gray-600 rounded px-3 py-2 bg-gray-200 text-gray-900 text-sm" />
                 </div>
               </div>
             )}
 
             {/* New user fields */}
-            {!formData.existingUserId && (
+            {(!formData.existingUserId || isEdit || isView) && (
               <>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
                   <div>
-                    <label className="block text-xs font-semibold text-gray-700 mb-1">First Name <span className="text-red-600">*</span></label>
+                    <label className="block text-xs font-semibold text-white mb-1">First Name <span className="text-red-600">*</span></label>
                     <input
                       value={formData.firstName}
                       onChange={(e) => { setFormData({ ...formData, firstName: e.target.value }); clearError('firstName'); }}
-                      className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-500"
+                      className="w-full border border-gray-600 rounded px-3 py-2 bg-gray-300 text-gray-900 text-sm focus:outline-none focus:ring-2 focus:ring-gray-500"
                       placeholder="First Name"
+                      readOnly={isView}
                     />
                     {errors.firstName && <p className="text-red-600 text-xs mt-1">{errors.firstName}</p>}
                   </div>
                   <div>
-                    <label className="block text-xs font-semibold text-gray-700 mb-1">Last Name <span className="text-red-600">*</span></label>
+                    <label className="block text-xs font-semibold text-white mb-1">Last Name <span className="text-red-600">*</span></label>
                     <input
                       value={formData.lastName}
                       onChange={(e) => { setFormData({ ...formData, lastName: e.target.value }); clearError('lastName'); }}
-                      className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-500"
+                      className="w-full border border-gray-600 rounded px-3 py-2 bg-gray-300 text-gray-900 text-sm focus:outline-none focus:ring-2 focus:ring-gray-500"
                       placeholder="Last Name"
+                      readOnly={isView}
                     />
                     {errors.lastName && <p className="text-red-600 text-xs mt-1">{errors.lastName}</p>}
                   </div>
@@ -500,24 +642,26 @@ const AddUser: React.FC = () => {
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
                   <div>
-                    <label className="block text-xs font-semibold text-gray-700 mb-1">Email <span className="text-red-600">*</span></label>
+                    <label className="block text-xs font-semibold text-white mb-1">Email <span className="text-red-600">*</span></label>
                     <input
                       type="email"
                       value={formData.email}
                       onChange={(e) => { setFormData({ ...formData, email: e.target.value }); clearError('email'); }}
-                      className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-500"
+                      className="w-full border border-gray-600 rounded px-3 py-2 bg-gray-300 text-gray-900 text-sm focus:outline-none focus:ring-2 focus:ring-gray-500"
                       placeholder="Email"
+                      readOnly={isView}
                     />
                     {errors.email && <p className="text-red-600 text-xs mt-1">{errors.email}</p>}
                   </div>
                   <div>
-                    <label className="block text-xs font-semibold text-gray-700 mb-1">Confirm Email <span className="text-red-600">*</span></label>
+                    <label className="block text-xs font-semibold text-white mb-1">Confirm Email <span className="text-red-600">*</span></label>
                     <input
                       type="email"
                       value={formData.confirmEmail}
                       onChange={(e) => { setFormData({ ...formData, confirmEmail: e.target.value }); clearError('confirmEmail'); }}
-                      className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-500"
+                      className="w-full border border-gray-600 rounded px-3 py-2 bg-gray-300 text-gray-900 text-sm focus:outline-none focus:ring-2 focus:ring-gray-500"
                       placeholder="Confirm Email"
+                      readOnly={isView}
                     />
                     {errors.confirmEmail && <p className="text-red-600 text-xs mt-1">{errors.confirmEmail}</p>}
                   </div>
@@ -525,24 +669,25 @@ const AddUser: React.FC = () => {
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
                   <div>
-                    <label className="block text-xs font-semibold text-gray-700 mb-1">Phone No <span className="text-red-600">*</span></label>
+                    <label className="block text-xs font-semibold text-white mb-1">Phone No <span className="text-red-600">*</span></label>
                     <input
                       type="tel"
                       value={formData.phoneNo}
                       onChange={(e) => { setFormData({ ...formData, phoneNo: e.target.value }); clearError('phoneNo'); }}
-                      className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-500"
+                      className="w-full border border-gray-600 rounded px-3 py-2 bg-gray-300 text-gray-900 text-sm focus:outline-none focus:ring-2 focus:ring-gray-500"
                       placeholder="10-digit number"
+                      readOnly={isView}
                     />
                     {errors.phoneNo && <p className="text-red-600 text-xs mt-1">{errors.phoneNo}</p>}
                   </div>
                   {/* User Groups - Dropdown Multi-select */}
                   <div>
-                    <label className="block text-xs font-semibold text-gray-700 mb-1">User Groups: <span className="text-red-600">*</span></label>
+                    <label className="block text-xs font-semibold text-white mb-1">User Groups: <span className="text-red-600">*</span></label>
                     <div className="relative user-group-dropdown">
                       {/* Main dropdown button */}
                       <div 
-                        className="w-full border border-gray-300 rounded px-3 py-2 bg-white text-sm min-h-[38px] cursor-pointer flex items-center justify-between"
-                        onClick={() => setShowUserGroupDropdown(!showUserGroupDropdown)}
+                        className={`w-full border border-gray-600 rounded px-3 py-2 bg-gray-300 text-gray-900 text-sm min-h-[38px] cursor-pointer flex items-center justify-between ${isView ? 'cursor-not-allowed' : ''}`}
+                        onClick={() => !isView && setShowUserGroupDropdown(!showUserGroupDropdown)}
                       >
                         <div className="flex flex-wrap gap-1 flex-1">
                           {formData.userGroup.length === 0 ? (
@@ -551,43 +696,47 @@ const AddUser: React.FC = () => {
                             formData.userGroup.map(group => (
                               <span key={group} className="bg-blue-100 text-blue-800 px-2 py-1 rounded-sm text-xs flex items-center gap-1">
                                 {group}
-                                <button
-                                  type="button"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    handleUserGroupChange(group);
-                                  }}
-                                  className="text-blue-600 hover:text-blue-800 font-bold"
-                                >
-                                  ×
-                                </button>
+                                {!isView && (
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleUserGroupChange(group);
+                                    }}
+                                    className="text-blue-600 hover:text-blue-800 font-bold"
+                                  >
+                                    ×
+                                  </button>
+                                )}
                               </span>
                             ))
-                          )}
+                          )};
                         </div>
                         {/* Dropdown arrow */}
-                        <svg 
-                          className={`w-4 h-4 transition-transform ${showUserGroupDropdown ? 'rotate-180' : ''}`} 
-                          fill="none" 
-                          stroke="currentColor" 
-                          viewBox="0 0 24 24"
-                        >
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                        </svg>
+                        {!isView && (
+                          <svg 
+                            className={`w-4 h-4 transition-transform ${showUserGroupDropdown ? 'rotate-180' : ''}`} 
+                            fill="none" 
+                            stroke="currentColor" 
+                            viewBox="0 0 24 24"
+                          >
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                          </svg>
+                        )}
                       </div>
 
                       {/* Dropdown menu */}
-                      {showUserGroupDropdown && (
-                        <div className="absolute z-50 w-full mt-1 bg-white border border-gray-300 rounded shadow-lg max-h-48 overflow-y-auto">
+                      {showUserGroupDropdown && !isView && (
+                        <div className="absolute z-50 w-full mt-1 bg-gray-300 border border-gray-600 rounded shadow-lg max-h-48 overflow-y-auto">
                           {/* Search input */}
-                          <div className="p-2 border-b bg-gray-50">
+                          <div className="p-2 border-b bg-gray-400">
                             <div className="relative">
                               <input
                                 type="text"
                                 placeholder="Search groups..."
                                 value={userGroupSearch}
                                 onChange={(e) => setUserGroupSearch(e.target.value)}
-                                className="w-full pl-8 pr-3 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                className="w-full pl-8 pr-3 py-1 text-sm border border-gray-600 rounded bg-gray-200 text-gray-900 focus:outline-none focus:ring-1 focus:ring-blue-500"
                               />
                               <svg className="absolute left-2 top-1.5 w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
@@ -596,8 +745,8 @@ const AddUser: React.FC = () => {
                           </div>
 
                           {/* Select all option */}
-                          <div className="p-2 bg-gray-50 border-b">
-                            <label className="flex items-center cursor-pointer hover:bg-gray-100 p-1 rounded">
+                          <div className="p-2 bg-gray-400 border-b">
+                            <label className="flex items-center cursor-pointer hover:bg-gray-500 p-1 rounded">
                               <input
                                 type="checkbox"
                                 checked={formData.userGroup.length === filteredUserGroups.length && filteredUserGroups.length > 0}
@@ -613,7 +762,7 @@ const AddUser: React.FC = () => {
                                 }}
                                 className="mr-2"
                               />
-                              <span className="text-sm font-semibold">Select all ({filteredUserGroups.length})</span>
+                              <span className="text-sm font-semibold text-white">Select all ({filteredUserGroups.length})</span>
                             </label>
                           </div>
 
@@ -621,7 +770,7 @@ const AddUser: React.FC = () => {
                           <div className="max-h-32 overflow-y-auto">
                             {filteredUserGroups.length > 0 ? (
                               filteredUserGroups.map(g => (
-                                <label key={g.id} className="flex items-center px-3 py-2 hover:bg-gray-50 cursor-pointer border-b border-gray-100 last:border-b-0">
+                                <label key={g.id} className="flex items-center px-3 py-2 hover:bg-gray-400 cursor-pointer border-b border-gray-600 last:border-b-0">
                                   <input
                                     type="checkbox"
                                     checked={formData.userGroup.includes(g.name)}
@@ -631,7 +780,7 @@ const AddUser: React.FC = () => {
                                     }}
                                     className="mr-2"
                                   />
-                                  <span className="text-sm">{g.name}</span>
+                                  <span className="text-sm text-white">{g.name}</span>
                                 </label>
                               ))
                             ) : (
@@ -652,11 +801,12 @@ const AddUser: React.FC = () => {
             {/* Role and Status */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
               <div>
-                <label className="block text-xs font-semibold text-gray-700 mb-1">Role: <span className="text-red-600">*</span></label>
+                <label className="block text-xs font-semibold text-white mb-1">Role: <span className="text-red-600">*</span></label>
                 <select
                   value={formData.role}
                   onChange={(e) => { setFormData({ ...formData, role: e.target.value }); clearError('role'); }}
-                  className="w-full border border-gray-300 rounded px-3 py-2 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-gray-500"
+                  className="w-full border border-gray-600 rounded px-3 py-2 bg-gray-300 text-gray-900 text-sm focus:outline-none focus:ring-2 focus:ring-gray-500"
+                  disabled={isView}
                 >
                   <option value="">Select Role</option>
                   {roles.map(r => (
@@ -666,39 +816,42 @@ const AddUser: React.FC = () => {
                 {errors.role && <p className="text-red-600 text-xs mt-1">{errors.role}</p>}
               </div>
               <div>
-                <label className="block text-xs font-semibold text-gray-700 mb-1">Activation Status: <span className="text-red-600">*</span></label>
-                <label className="flex items-center h-[38px] border border-gray-300 rounded px-3 py-2">
+                <label className="block text-xs font-semibold text-white mb-1">Activation Status: <span className="text-red-600">*</span></label>
+                <label className="flex items-center h-[38px] border border-gray-600 rounded px-3 py-2 bg-gray-300">
                   <input
                     type="checkbox"
                     checked={formData.isActive}
                     onChange={(e) => { setFormData({ ...formData, isActive: e.target.checked }); clearError('isActive'); }}
                     className="w-4 h-4 text-gray-700 border-gray-300 rounded focus:ring-gray-500"
+                    disabled={isView}
                   />
-                  <span className="ml-2 text-xs text-gray-700">Activate user account</span>
+                  <span className="ml-2 text-xs text-gray-900">Activate user account</span>
                 </label>
                 {errors.isActive && <p className="text-red-600 text-xs mt-1">{errors.isActive}</p>}
               </div>
             </div>
 
             {/* Actions */}
-            <div className="mt-6 border-t border-gray-200 pt-4 bg-gray-100 rounded-b-md -mx-4 px-4">
-              <div className="flex justify-center gap-4">
-                <button
-                  type="submit"
-                  disabled={isSubmitting}
-                  className="bg-gray-800 text-white px-6 py-2 rounded text-sm hover:bg-gray-900 disabled:opacity-50"
-                >
-                  {isSubmitting ? 'Registering...' : 'Register'}
-                </button>
-                <button
-                  type="button"
-                  onClick={handleReset}
-                  className="border-2 border-gray-400 text-gray-700 px-6 py-2 rounded text-sm hover:bg-gray-50"
-                >
-                  Reset
-                </button>
+            {!isView && (
+              <div className="mt-6 border-t border-gray-500 pt-4 bg-gray-600 -mx-4 px-4">
+                <div className="flex justify-center gap-4 pb-4">
+                  <button
+                    type="submit"
+                    disabled={isSubmitting}
+                    className="bg-gray-800 text-white px-6 py-2 rounded text-sm hover:bg-gray-900 disabled:opacity-50"
+                  >
+                    {isSubmitting ? (isEdit ? 'Updating...' : 'Registering...') : (isEdit ? 'Update' : 'Register')}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleReset}
+                    className="border-2 border-gray-300 text-white px-6 py-2 rounded text-sm hover:bg-gray-500"
+                  >
+                    Reset
+                  </button>
+                </div>
               </div>
-            </div>
+            )}
           </form>
         </div>
       </div>

@@ -28,7 +28,11 @@ export default function App(): React.ReactElement {
           <Route path="/" element={<Home />} />
           <Route path="/dashboard" element={<Dashboard />} /> {/* added dashboard route */}
           <Route path="/manage-users" element={<ManageUser />} />
+
+          {/* Add / Edit / View routes for user form */}
           <Route path="/add-user" element={<AddUser />} />
+          <Route path="/add-user/:id" element={<AddUser />} />
+          <Route path="/view-user/:id" element={<AddUser />} />
         </Route>
       </Routes>
     </BrowserRouter>

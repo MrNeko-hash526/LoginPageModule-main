@@ -325,7 +325,7 @@ const ManageUser: React.FC = () => {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-gray-100 p-4">
+      <div className="min-h-screen bg-gray-700 p-4">
         <ToastContainer />
         <div className="max-w-7xl mx-auto space-y-3">
           <TableSkeleton />
@@ -339,7 +339,7 @@ const ManageUser: React.FC = () => {
   ) => sortColumn === key ? (sortDirection === 'asc' ? '▲' : '▼') : '↕';
 
   return (
-    <div className="min-h-screen bg-gray-100 p-4">
+    <div className="min-h-screen bg-gray-700 p-4">
       <ToastContainer />
       <div className="max-w-7xl mx-auto space-y-3">
         {error && (
@@ -349,23 +349,23 @@ const ManageUser: React.FC = () => {
         )}
 
         {/* Toolbar */}
-        <div className="bg-white border border-gray-200 rounded-md shadow-sm px-3 py-2">
+        <div className="bg-gray-500 border border-gray-700 rounded-md shadow-sm px-3 py-2">
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-            <div className="text-sm font-semibold text-gray-800">Users</div>
+            <div className="text-sm font-semibold text-gray-900">Users</div>
             <div className="flex flex-wrap items-center gap-2">
               <div className="relative">
                 <input
                   value={searchTerm}
                   onChange={(e) => { setSearchTerm(e.target.value); setCurrentPage(1); }}
                   placeholder="Search name, email, username"
-                  className="pl-8 pr-3 py-1.5 text-sm border border-gray-300 rounded-md bg-white placeholder:text-gray-400 focus:outline-none focus:ring-1 focus:ring-gray-500"
+                  className="pl-8 pr-3 py-1.5 text-sm border border-gray-300 rounded-md bg-gray-400 placeholder:text-gray-400 focus:outline-none focus:ring-1 focus:ring-gray-500"
                 />
-                <span className="absolute left-2 top-1.5 text-gray-400">🔍</span>
+                <span className="absolute left-2 top-1.5 text-black">🔍</span>
               </div>
               <select
                 value={roleFilter}
                 onChange={(e) => { setRoleFilter(e.target.value); setCurrentPage(1); }}
-                className="text-sm border border-gray-300 rounded-md px-2 py-1.5 bg-white"
+                className="text-sm border border-gray-400 rounded-md px-2 py-1.5 bg-gray-400"
               >
                 <option value="all">All roles</option>
                 <option value="admin">Admin</option>
@@ -376,7 +376,7 @@ const ManageUser: React.FC = () => {
               <select
                 value={statusFilter}
                 onChange={(e) => { setStatusFilter(e.target.value); setCurrentPage(1); }}
-                className="text-sm border border-gray-300 rounded-md px-2 py-1.5 bg-white"
+                className="text-sm border border-gray-300 rounded-md px-2 py-1.5 bg-gray-400"
               >
                 <option value="all">All status</option>
                 <option value="active">Active</option>
@@ -393,65 +393,65 @@ const ManageUser: React.FC = () => {
         </div>
 
         {/* Table */}
-        <div className="bg-white border border-gray-200 rounded-md shadow-sm overflow-hidden">
+        <div className="bg-gray-700 border border-gray-500 rounded-md shadow-sm overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full text-[13px]">
-              <thead className="bg-gray-50 border-b border-gray-200">
+              <thead className="bg-gray-600 border-b border-gray-500">
                 <tr>
-                  <th className="px-3 py-2 text-left uppercase text-[11px] tracking-wide text-gray-600">#</th>
-                  <th role="button" aria-sort={sortColumn === 'name' ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'} onClick={() => handleSort('name')} className="px-3 py-2 text-left uppercase text-[11px] tracking-wide text-gray-600 cursor-pointer select-none">
+                  <th className="px-3 py-2 text-left uppercase text-[11px] tracking-wide text-white">#</th>
+                  <th role="button" aria-sort={sortColumn === 'name' ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'} onClick={() => handleSort('name')} className="px-3 py-2 text-left uppercase text-[11px] tracking-wide text-white cursor-pointer select-none">
                     <span className="flex items-center justify-between w-full"><span>Name</span><span>{sortIcon('name')}</span></span>
                   </th>
-                  <th role="button" aria-sort={sortColumn === 'email' ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'} onClick={() => handleSort('email')} className="px-3 py-2 text-left uppercase text-[11px] tracking-wide text-gray-600 cursor-pointer select-none">
+                  <th role="button" aria-sort={sortColumn === 'email' ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'} onClick={() => handleSort('email')} className="px-3 py-2 text-left uppercase text-[11px] tracking-wide text-white cursor-pointer select-none">
                     <span className="flex items-center justify-between w-full"><span>Email</span><span>{sortIcon('email')}</span></span>
                   </th>
-                  <th role="button" aria-sort={sortColumn === 'phone_no' ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'} onClick={() => handleSort('phone_no')} className="px-3 py-2 text-left uppercase text-[11px] tracking-wide text-gray-600 cursor-pointer select-none">
+                  <th role="button" aria-sort={sortColumn === 'phone_no' ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'} onClick={() => handleSort('phone_no')} className="px-3 py-2 text-left uppercase text-[11px] tracking-wide text-white cursor-pointer select-none">
                     <span className="flex items-center justify-between w-full"><span>Phone No.</span><span>{sortIcon('phone_no')}</span></span>
                   </th>
-                  <th role="button" aria-sort={sortColumn === 'userType' ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'} onClick={() => handleSort('userType')} className="px-3 py-2 text-left uppercase text-[11px] tracking-wide text-gray-600 cursor-pointer select-none">
+                  <th role="button" aria-sort={sortColumn === 'userType' ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'} onClick={() => handleSort('userType')} className="px-3 py-2 text-left uppercase text-[11px] tracking-wide text-white cursor-pointer select-none">
                     <span className="flex items-center justify-between w-full"><span>User Type</span><span>{sortIcon('userType')}</span></span>
                   </th>
-                  <th role="button" aria-sort={sortColumn === 'user_group' ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'} onClick={() => handleSort('user_group')} className="px-3 py-2 text-left uppercase text-[11px] tracking-wide text-gray-600 cursor-pointer select-none">
+                  <th role="button" aria-sort={sortColumn === 'user_group' ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'} onClick={() => handleSort('user_group')} className="px-3 py-2 text-left uppercase text-[11px] tracking-wide text-white cursor-pointer select-none">
                     <span className="flex items-center justify-between w-full"><span>User Group</span><span>{sortIcon('user_group')}</span></span>
                   </th>
-                  <th role="button" aria-sort={sortColumn === 'code' ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'} onClick={() => handleSort('code')} className="px-3 py-2 text-left uppercase text-[11px] tracking-wide text-gray-600 cursor-pointer select-none">
+                  <th role="button" aria-sort={sortColumn === 'code' ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'} onClick={() => handleSort('code')} className="px-3 py-2 text-left uppercase text-[11px] tracking-wide text-white cursor-pointer select-none">
                     <span className="flex items-center justify-between w-full"><span>Code</span><span>{sortIcon('code')}</span></span>
                   </th>
-                  <th role="button" aria-sort={sortColumn === 'companyStatus' ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'} onClick={() => handleSort('companyStatus')} className="px-3 py-2 text-left uppercase text-[11px] tracking-wide text-gray-600 cursor-pointer select-none">
+                  <th role="button" aria-sort={sortColumn === 'companyStatus' ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'} onClick={() => handleSort('companyStatus')} className="px-3 py-2 text-left uppercase text-[11px] tracking-wide text-white cursor-pointer select-none">
                     <span className="flex items-center justify-between w-full"><span>Company Status</span><span>{sortIcon('companyStatus')}</span></span>
                   </th>
-                  <th role="button" aria-sort={sortColumn === 'isActive' ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'} onClick={() => handleSort('isActive')} className="px-3 py-2 text-left uppercase text-[11px] tracking-wide text-gray-600 cursor-pointer select-none">
+                  <th role="button" aria-sort={sortColumn === 'isActive' ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'} onClick={() => handleSort('isActive')} className="px-3 py-2 text-left uppercase text-[11px] tracking-wide text-white cursor-pointer select-none">
                     <span className="flex items-center justify-between w-full"><span>User Status</span><span>{sortIcon('isActive')}</span></span>
                   </th>
-                  <th role="button" aria-sort={sortColumn === 'role' ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'} onClick={() => handleSort('role')} className="px-3 py-2 text-left uppercase text-[11px] tracking-wide text-gray-600 cursor-pointer select-none">
+                  <th role="button" aria-sort={sortColumn === 'role' ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'} onClick={() => handleSort('role')} className="px-3 py-2 text-left uppercase text-[11px] tracking-wide text-white cursor-pointer select-none">
                     <span className="flex items-center justify-between w-full"><span>Role</span><span>{sortIcon('role')}</span></span>
                   </th>
-                  <th className="px-3 py-2 text-center uppercase text-[11px] tracking-wide text-gray-600">Action</th>
+                  <th className="px-3 py-2 text-center uppercase text-[11px] tracking-wide text-white">Action</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-100">
+              <tbody className="divide-y divide-gray-500">
                 {paginated.map((u, idx) => (
-                  <tr key={u._id} className="hover:bg-gray-50">
-                    <td className="px-3 py-2 text-gray-800">{startIndex + idx + 1}</td>
-                    <td className="px-3 py-2 text-gray-900 font-medium">{u.firstName} {u.lastName}</td>
-                    <td className="px-3 py-2 text-gray-700">{u.email}</td>
-                    <td className="px-3 py-2 text-gray-700">{u.phone_no || '-'}</td>
+                  <tr key={u._id} className="hover:bg-gray-500">
+                    <td className="px-3 py-2 text-white">{startIndex + idx + 1}</td>
+                    <td className="px-3 py-2 text-white font-medium">{u.firstName} {u.lastName}</td>
+                    <td className="px-3 py-2 text-white">{u.email}</td>
+                    <td className="px-3 py-2 text-white">{u.phone_no || '-'}</td>
                     <td className="px-3 py-2">
-                      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold bg-gray-100 text-gray-700">
+                      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold bg-white text-gray-800">
                         {u.userType || 'CONV'}
                       </span>
                     </td>
-                    <td className="px-3 py-2 text-gray-700 max-w-[220px] truncate">{u.user_group || '-'}</td>
-                    <td className="px-3 py-2 text-gray-700">{u.code || 'ALL'}</td>
+                    <td className="px-3 py-2 text-white max-w-[220px] truncate">{u.user_group || '-'}</td>
+                    <td className="px-3 py-2 text-white">{u.code || 'ALL'}</td>
                     <td className="px-3 py-2">
                       <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold
-                        ${u.companyStatus === 'Active' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-700'}`}>
+                        ${u.companyStatus === 'Active' ? 'bg-green-700 text-white' : 'bg-white text-gray-800'}`}>
                         {u.companyStatus || 'Active'}
                       </span>
                     </td>
                     <td className="px-3 py-2">
                       <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold gap-1
-                        ${u.isActive ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                        ${u.isActive ? 'bg-green-700 text-white' : 'bg-red-700 text-white'}`}>
                         {u.isActive ? (
                           <>
                             <svg width="12" height="12" fill="currentColor" viewBox="0 0 24 24">
@@ -470,24 +470,20 @@ const ManageUser: React.FC = () => {
                       </span>
                     </td>
                     <td className="px-3 py-2">
-                      <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold
-                        ${u.role === 'Admin' ? 'bg-red-100 text-red-700'
-                          : u.role === 'Manager' ? 'bg-yellow-100 text-yellow-700'
-                          : u.role === 'Executive' ? 'bg-blue-100 text-blue-700'
-                          : 'bg-gray-100 text-gray-700'}`}>
+                      <span className="text-white">
                         {u.role || '-'}
                       </span>
                     </td>
                     <td className="px-3 py-2">
                       <div className="flex items-center justify-center gap-1">
-                        <button className="p-1.5 rounded hover:bg-gray-100 text-gray-600" title="View">
+                        <button onClick={() => navigate(`/view-user/${u._id}`)} className="p-1.5 rounded bg-blue-500 text-white hover:bg-blue-600" title="View">
                           <svg width="16" height="16" fill="currentColor" viewBox="0 0 24 24"><path d="M12 5c5 0 9 4.5 10 7-1 2.5-5 7-10 7S3 14.5 2 12c1-2.5 5-7 10-7Zm0 2C8.5 7 5.6 9.9 4.4 12 5.6 14.1 8.5 17 12 17s6.4-2.9 7.6-5C18.4 9.9 15.5 7 12 7Zm0 2.5a2.5 2.5 0 1 1 0 5 2.5 2.5 0 0 1 0-5Z"/></svg>
                         </button>
-                        <button className="p-1.5 rounded hover:bg-gray-100 text-gray-600" title="Edit">
+                        <button onClick={() => navigate(`/add-user/${u._id}`)} className="p-1.5 rounded bg-blue-500 text-white hover:bg-blue-600" title="Edit">
                           <svg width="16" height="16" fill="currentColor" viewBox="0 0 24 24"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25Zm14.71-9.04a1 1 0 0 0 0-1.41l-1.5-1.5a1 1 0 0 0-1.41 0l-1.12 1.12 3.75 3.75 1.28-1.96Z"/></svg>
                         </button>
                         <button
-                          className="p-1.5 rounded hover:bg-gray-100 text-gray-600"
+                          className="p-1.5 rounded bg-blue-500 text-white hover:bg-blue-600"
                           onClick={() => toggleUserStatus(u._id, u.isActive)}
                           title={u.isActive ? 'Deactivate' : 'Activate'}
                         >
@@ -498,7 +494,7 @@ const ManageUser: React.FC = () => {
                           )}
                         </button>
                         <button
-                          className="p-1.5 rounded hover:bg-blue-50 text-blue-600"
+                          className="p-1.5 rounded bg-blue-500 text-white hover:bg-blue-600"
                           onClick={() => resendResetEmail(u._id, u.email)}
                           title="Resend Reset Email"
                         >
@@ -510,7 +506,7 @@ const ManageUser: React.FC = () => {
                 ))}
                 {paginated.length === 0 && (
                   <tr>
-                    <td colSpan={11} className="px-3 py-8 text-center text-sm text-gray-500">
+                    <td colSpan={11} className="px-3 py-8 text-center text-sm text-white/80">
                       No users found.
                     </td>
                   </tr>
@@ -520,15 +516,15 @@ const ManageUser: React.FC = () => {
           </div>
 
           {/* Footer / Pagination */}
-          <div className="flex flex-col sm:flex-row items-center justify-between gap-2 px-3 py-2 border-t border-gray-200 bg-gray-50">
-            <div className="text-[12px] text-gray-700">
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-2 px-3 py-2 border-t border-gray-500 bg-gray-600">
+            <div className="text-[12px] text-white">
               Showing {total === 0 ? 0 : startIndex + 1} to {Math.min(startIndex + itemsPerPage, total)} of {total} entries
             </div>
             <div className="flex items-center gap-1">
               <button
                 onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
                 disabled={currentPage === 1}
-                className="px-2.5 py-1 text-[12px] border border-gray-300 rounded bg-white text-gray-700 disabled:opacity-50"
+                className="px-2.5 py-1 text-[12px] border rounded bg-gray-700 text-white disabled:opacity-50"
               >
                 Previous
               </button>
@@ -537,7 +533,7 @@ const ManageUser: React.FC = () => {
                   key={p}
                   onClick={() => setCurrentPage(p)}
                   className={`px-2.5 py-1 text-[12px] rounded border ${
-                    currentPage === p ? 'bg-gray-800 text-white border-gray-800' : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-100'
+                    currentPage === p ? 'bg-black text-white border-black' : 'bg-gray-200 text-gray-800 border-gray-300 hover:bg-gray-300'
                   }`}
                 >
                   {p}
@@ -546,7 +542,7 @@ const ManageUser: React.FC = () => {
               <button
                 onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
                 disabled={currentPage === totalPages}
-                className="px-2.5 py-1 text-[12px] border border-gray-300 rounded bg-white text-gray-700 disabled:opacity-50"
+                className="px-2.5 py-1 text-[12px] border rounded bg-gray-700 text-white disabled:opacity-50"
               >
                 Next
               </button>
