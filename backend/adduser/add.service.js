@@ -270,11 +270,77 @@ async function setPassword(email, token, newPassword) {
   return { success: true, message: 'Password updated successfully' };
 }
 
+// Add this new function at the end, before module.exports
+async function updateUser(userId, payload) {
+  const { firstName, lastName, email, phoneNo, role, userGroup, isActive, companyId } = payload;
+  
+  try {
+    // Update user basic info
+    await query(`
+      UPDATE users 
+      SET first_name = ?, 
+          last_name = ?, 
+          email = ?, 
+          phone_no = ?, 
+          user_group = ?, 
+          active_inactive_status = ?
+      WHERE user_id = ? AND bit_deleted_flag = 0
+    `, [
+      firstName,
+      lastName,
+      email,
+      phoneNo || '',
+      JSON.stringify(userGroup || []),
+      isActive ? 1 : 0,
+      userId
+    ]);
+
+    // Update role if provided and companyId is provided
+    if (role && companyId) {
+      // Get role_id from roles table
+      const roleRow = await query('SELECT role_id FROM roles WHERE role_name = ?', [role]);
+      if (roleRow[0]) {
+        const roleId = roleRow[0].role_id;
+        
+        // Update existing role or insert new one
+        const existingRole = await query(`
+          SELECT id FROM user_roles 
+          WHERE user_id = ? AND company_id = ? AND bit_deleted_flag = 0
+        `, [userId, companyId]);
+        
+        if (existingRole.length > 0) {
+          // Update existing role
+          await query(`
+            UPDATE user_roles 
+            SET role_id = ? 
+            WHERE user_id = ? AND company_id = ? AND bit_deleted_flag = 0
+          `, [roleId, userId, companyId]);
+        } else {
+          // Insert new role
+          await query(`
+            INSERT INTO user_roles (user_id, company_id, role_id, bit_deleted_flag, assigned_at) 
+            VALUES (?, ?, ?, ?, NOW())
+          `, [userId, companyId, roleId, 0]);
+        }
+      }
+    }
+
+    return { 
+      success: true, 
+      message: 'User updated successfully'
+    };
+  } catch (error) {
+    console.error('Error in updateUser service:', error);
+    throw error;
+  }
+}
+
 module.exports = { 
   createUser,
   getUserGroups,
   getUsers,
   getCompanies,
   getRoles,
-  setPassword
+  setPassword,
+  updateUser  // Add this to exports
 };

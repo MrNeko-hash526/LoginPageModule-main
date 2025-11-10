@@ -413,17 +413,16 @@ const AddUser: React.FC = () => {
       let url: string;
 
       if (isEdit) {
-        // For edit mode, use the status update endpoint or create a new update endpoint
-        method = 'PATCH'; // or 'PUT' if you create a full update endpoint
-        url = `/api/manageuser/users/${id}/update`; // You might need to create this endpoint
+        method = 'PUT';
+        url = `/api/adduser/users/${id}/update`;  // Use the new endpoint
         
         payload = {
           firstName: formData.firstName,
           lastName: formData.lastName,
           email: formData.email,
-          phone_no: formData.phoneNo,
+          phoneNo: formData.phoneNo,
           role: formData.role,
-          user_group: formData.userGroup,
+          userGroup: formData.userGroup,
           isActive: formData.isActive,
           companyId: formData.companyId
         };
@@ -462,12 +461,6 @@ const AddUser: React.FC = () => {
         },
         body: JSON.stringify(payload)
       });
-      
-      if (res.status === 404 && isEdit) {
-        // If update endpoint doesn't exist, show a message
-        showToast('Update functionality not available. Contact administrator.', 'error');
-        return;
-      }
       
       const result = await res.json();
       if (!res.ok) {

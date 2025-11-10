@@ -3,7 +3,8 @@ const {
   getUserGroups,
   getUsers,
   getCompanies,
-  getRoles
+  getRoles,
+  updateUser  // Add this import
 } = require('./add.service');
 
 // Create user
@@ -13,6 +14,18 @@ const createUserController = async (req, res) => {
     res.json(result);
   } catch (error) {
     console.error('Error creating user:', error);
+    res.status(400).json({ success: false, message: error.message });
+  }
+};
+
+// Update user - Add this new controller
+const updateUserController = async (req, res) => {
+  try {
+    const userId = req.params.id;
+    const result = await updateUser(userId, req.body);
+    res.json(result);
+  } catch (error) {
+    console.error('Error updating user:', error);
     res.status(400).json({ success: false, message: error.message });
   }
 };
@@ -64,6 +77,7 @@ const getCompaniesController = async (req, res) => {
 
 module.exports = {
   createUser: createUserController,
+  updateUser: updateUserController,  // Add this export
   getUserGroups: getUserGroupsController,
   getUsers: getUsersController,
   getCompanies: getCompaniesController,
