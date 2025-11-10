@@ -6,7 +6,7 @@ import AddUser from './manageUsers/AddUser';
 import ResetPassword from './resetPassword/resetPassword';
 import ForgotPassword from './Login/forgetPassword';
 import Layout from '../layout/layout';
-import Dashboard from './components/dashboard/Dashboard'; // added
+import Dashboard from './dashboard/Dashboard'; // added
 
 function Home() {
   const isAuthenticated = localStorage.getItem('isAuthenticated') === 'true';
