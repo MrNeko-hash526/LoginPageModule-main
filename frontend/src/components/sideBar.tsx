@@ -1,25 +1,26 @@
 import React, { useEffect, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { Home, Users, PlusSquare, LogOut } from 'lucide-react';
+import { Home, Users, PlusSquare, LogOut, Shield } from 'lucide-react';  // Added Shield for Admin Dashboard
 
 type Role = string;
 
+// Use the SAME parsing logic as App.tsx
 function parseRolesFromToken(token?: string): Role[] {
   if (!token) return [];
   try {
     const parts = token.split('.');
     if (parts.length < 2) return [];
     const payload = JSON.parse(atob(parts[1].replace(/-/g, '+').replace(/_/g, '/')));
-    const raw =
-      payload.userTypes ||
-      payload.roles ||
-      payload.role ||
-      payload.user?.roles ||
-      payload.user?.userTypes ||
-      payload.rolesList ||
-      payload.scope ||
-      payload.role_name ||
-      null;
+    
+    // After role selection, the token should contain ONLY the selected role
+    // Check for selectedRole first (this is what should be in token after selection)
+    const selectedRole = payload.selectedRole || payload.role_name;
+    if (selectedRole) {
+      return [String(selectedRole).toLowerCase()];
+    }
+    
+    // Fallback for multiple roles (before selection)
+    const raw = payload.roles || payload.userTypes || payload.role || null;
     if (!raw) return [];
     if (Array.isArray(raw)) return raw.map((r: any) => String(r).toLowerCase());
     if (typeof raw === 'string') {
@@ -35,19 +36,38 @@ export default function SideBar() {
   const location = useLocation();
   const [roles, setRoles] = useState<Role[]>([]);
   const [collapsed, setCollapsed] = useState(false);
- 
+
   useEffect(() => {
-    const token = localStorage.getItem('token') || undefined;
-    setRoles(parseRolesFromToken(token));
+    const loadRoles = () => {
+      const token = localStorage.getItem('token') || undefined;
+      setRoles(parseRolesFromToken(token));
+    };
+
+    loadRoles();
+    const onAuthChanged = () => loadRoles();
+    const onStorage = (e: StorageEvent) => { if (e.key === 'token') loadRoles(); };
+    
+    window.addEventListener('authChanged', onAuthChanged);
+    window.addEventListener('storage', onStorage);
+    
+    return () => {
+      window.removeEventListener('authChanged', onAuthChanged);
+      window.removeEventListener('storage', onStorage);
+    };
   }, []);
 
-  const isAdminOrManager = roles.includes('admin') || roles.includes('manager');
+  // Check if user has admin or manager role based on SELECTED role only
+  const isAdminOrManager = roles.some(role => 
+    role.includes('admin') || role.includes('manager')
+  );
+
+  console.log('🔧 Sidebar roles:', roles, 'isAdminOrManager:', isAdminOrManager);
 
   const navItem = (to: string, label: string, Icon: any) => {
-    // consider root '/' as dashboard as well so active state highlights correctly
+    // Updated: Consider root '/' and '/dashboard-user' as active for the general dashboard
     const active =
       location.pathname === to ||
-      (to === '/dashboard' && (location.pathname === '/' || location.pathname === '/dashboard'));
+      (to === '/dashboard-user' && (location.pathname === '/' || location.pathname === '/dashboard-user'));
 
     return (
       <Link
@@ -85,9 +105,13 @@ export default function SideBar() {
       </div>
 
       <nav className="flex-1 px-2 py-3 space-y-1">
-        {navItem('/dashboard', 'Dashboard', Home)}
+        {/* General Dashboard: Always available */}
+        {navItem('/dashboard-user', 'Dashboard', Home)}
+        
+        {/* Admin/Manager only items */}
+        {isAdminOrManager && navItem('/dashboard-admin', 'Admin Dashboard', Shield)}
         {isAdminOrManager && navItem('/manage-users', 'Manage Users', Users)}
-        {navItem('/add-user', 'Add User', PlusSquare)}
+        {isAdminOrManager && navItem('/add-user', 'Add User', PlusSquare)}
       </nav>
 
       <div className="px-3 py-3 border-t border-gray-700">

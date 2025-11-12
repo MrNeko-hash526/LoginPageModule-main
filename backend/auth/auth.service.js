@@ -66,7 +66,7 @@ async function parseUserTypes(userId) {
       SELECT DISTINCT r.role_name
       FROM user_roles ur
       JOIN roles r ON ur.role_id = r.role_id
-      WHERE ur.user_id = ? AND ur.bit_deleted_flag = 0
+      WHERE ur.user_id = ?
     `, [userId]);
     return rows.map(row => row.role_name);
   } catch (error) {
@@ -79,10 +79,10 @@ async function buildAvailableCompanies(userId) {
   try {
     const rows = await query(`
       SELECT DISTINCT c.company_id AS id, c.company_name AS name, c.company_name AS code,
-             c.company_status = 1 AS status, c.parent_company_id AS parentId
+             c.company_status = 1 AS status
       FROM user_roles ur
       JOIN companies c ON ur.company_id = c.company_id
-      WHERE ur.user_id = ? AND ur.bit_deleted_flag = 0
+      WHERE ur.user_id = ?
     `, [userId]);
     return rows;
   } catch (error) {
@@ -99,7 +99,7 @@ async function getRolesFromUserType(userId, selectedCompanyId) {
              ? AS companyId, false AS isGlobal
       FROM user_roles ur
       JOIN roles r ON ur.role_id = r.role_id
-      WHERE ur.user_id = ? AND ur.company_id = ? AND ur.bit_deleted_flag = 0
+      WHERE ur.user_id = ? AND ur.company_id = ?
     `, [selectedCompanyId, userId, selectedCompanyId]);
     return rows;
   } catch (error) {
@@ -129,7 +129,7 @@ async function logLoginActivity(userId, email, ipAddress, macAddress, browserDet
   }
 }
 
-// Updated: Login function (removed company_password logic, keep companyId for selection)
+// Updated: Login function with debugging
 async function login(email, password, companyId = null, req = null) {
   const user = await findUserByEmail(email);
   if (!user) {
@@ -137,6 +137,8 @@ async function login(email, password, companyId = null, req = null) {
     err.status = 401;
     throw err;
   }
+
+  console.log('🔍 User found:', user.user_id, user.email);
 
   // Always use global password (removed company_password check)
   const valid = await verifyPassword(password, user.password_hash);
@@ -146,46 +148,26 @@ async function login(email, password, companyId = null, req = null) {
     throw err;
   }
 
-  // Fetch available companies and roles
-  const availableCompanies = await buildAvailableCompanies(user.user_id);
-  const userTypes = await parseUserTypes(user.user_id);
-
-  // Log successful login (fixed column name to 'full_name')
-  if (req) {
-    const ip = req.ip || req.connection.remoteAddress;
-    const userAgent = req.get('User-Agent') || 'Unknown';
-    await logLoginActivity(user.user_id, user.email, ip, null, userAgent, 'Web', 1);
+  // Fetch all access combinations
+  console.log('🔍 Fetching access combinations for user:', user.user_id);
+  const combinations = await getAllAccessCombinations(user.user_id);
+  console.log('🔍 Access combinations found:', combinations.length, combinations);
+  
+  if (combinations.length === 0) {
+    const err = new Error('No access roles found for this user');
+    err.status = 403;
+    throw err;
   }
 
-  // Create JWT payload
-  const payload = {
-    id: user.user_id,
-    email: user.email,
-    userTypes: userTypes
-  };
-
-  const token = jwt.sign(payload, JWT_SECRET, { expiresIn: JWT_EXPIRES });
-
-  // Prepare user data
+  // If multiple combinations, return for selection
   const safeUser = sanitizeUserRow(user);
-  safeUser.availableCompanies = availableCompanies;
-  safeUser.userTypes = userTypes;
-  safeUser.firstName = user.first_name || '';
-  safeUser.fullName = `${user.first_name || ''} ${user.last_name || ''}`.trim();
-  safeUser.lastName = user.last_name || '';
-
-  // If company selected, set selectedCompany (kept for post-login selection)
-  if (companyId) {
-    const selectedCompany = availableCompanies.find(c => c.id == companyId);
-    if (selectedCompany) {
-      safeUser.selectedCompany = selectedCompany;
-      safeUser.selectedCompanyId = companyId;
-    }
-  }
+  safeUser.availableCombinations = combinations;  // Return the list
+  safeUser.userTypes = await parseUserTypes(user.user_id);
 
   return {
     user: safeUser,
-    token
+    token: null,  // No token yet
+    autoLoggedIn: false
   };
 }
 
@@ -217,7 +199,7 @@ async function selectRole(userId, selection) {
     const roleCheck = await query(`
       SELECT 1
       FROM user_roles ur
-      WHERE ur.user_id = ? AND ur.company_id = ? AND ur.role_id = ? AND ur.bit_deleted_flag = 0
+      WHERE ur.user_id = ? AND ur.company_id = ? AND ur.role_id = ?
       LIMIT 1
     `, [userId, companyId, roleId]);
     if (roleCheck.length === 0) {
@@ -228,15 +210,26 @@ async function selectRole(userId, selection) {
 
     // Get company and role details
     const company = await query(`
-      SELECT company_id AS id, company_name AS name
+      SELECT company_id AS id, company_name AS name, entity_type, entity_code
       FROM companies
       WHERE company_id = ?
     `, [companyId]);
+    if (company.length === 0) {
+      const err = new Error('Company not found');
+      err.status = 404;
+      throw err;
+    }
+
     const role = await query(`
       SELECT role_id AS id, role_name AS name
       FROM roles
       WHERE role_id = ?
     `, [roleId]);
+    if (role.length === 0) {
+      const err = new Error('Role not found');
+      err.status = 404;
+      throw err;
+    }
 
     const updatedUser = {
       selectedRoleId: roleId,
@@ -247,12 +240,15 @@ async function selectRole(userId, selection) {
       currentCompany: companyId,
       userTypes: await parseUserTypes(userId),
       availableCompanies: await buildAvailableCompanies(userId),
-      availableRoles: await getRolesFromUserType(userId, companyId)
+      availableRoles: await getRolesFromUserType(userId, companyId),
+      email: user.email,
+      entity_type: company[0].entity_type,
+      entity_code: company[0].entity_code
     };
 
     // Insert new row in login_activity for this selection
-    const ip = '127.0.0.1';  // Placeholder; adjust if you have req object
-    const userAgent = 'Web';  // Placeholder
+    const ip = '127.0.0.1';
+    const userAgent = 'Web';
     await logLoginActivity(userId, user.email, ip, null, userAgent, 'Web', 1, null, companyId, roleId);
 
     return {
@@ -380,27 +376,73 @@ async function forgotPassword(email) {
   return { success: true, message: 'Reset email sent.' };
 }
 
-// Get companies
+// Updated: Get companies (removed parent_company_id)
 async function getCompanies() {
-  const rows = await query('SELECT company_id AS id, company_name AS name, parent_company_id AS parentId FROM companies');
+  const rows = await query('SELECT company_id AS id, company_name AS name FROM companies');
   return rows;
 }
 
-module.exports = { 
-  login, 
-  findUserByEmail, 
+// Updated: Get all access combinations for a user with proper role_id
+async function getAllAccessCombinations(userId) {
+  try {
+    console.log('🔍 Fetching combinations for userId:', userId);
+    
+    const rows = await query(`
+      SELECT 
+          ur.user_id,
+          c.company_id,
+          c.company_name,
+          c.entity_type,
+          c.entity_code,
+          r.role_id,
+          r.role_name
+      FROM user_roles ur
+      JOIN companies c ON ur.company_id = c.company_id
+      JOIN roles r ON ur.role_id = r.role_id
+      WHERE ur.user_id = ?
+      ORDER BY c.company_id, r.role_name;
+    `, [userId]);
+
+    console.log('🔍 Raw query results:', rows);
+
+    // Return flattened structure with proper role_id
+    const combinations = rows.map(row => ({
+      company_id: row.company_id,
+      company_name: row.company_name,
+      entity_type: row.entity_type,
+      entity_code: row.entity_code,
+      role_id: row.role_id,
+      role_name: row.role_name,
+    }));
+
+    console.log('🔍 Final combinations:', combinations);
+    return combinations;
+
+  } catch (error) {
+    console.error('Error in getAllAccessCombinations:', error);
+    throw error;
+  }
+}
+
+// Export all functions
+module.exports = {
+  findUserByEmail,
   findUserById,
-  sanitizeUserRow, 
-  selectRole,
-  getRolesForCompany,
+  verifyPassword,
+  sanitizeUserRow,
   parseUserTypes,
+  buildAvailableCompanies,
   getRolesFromUserType,
   logLoginActivity,
+  login,
+  getCompaniesForEmail,
+  selectRole,
+  getRolesForCompany,
   getUserRoles,
   assignRole,
   removeRole,
-  getCompaniesForEmail,  // Added
-  setPassword,  // Added
-  forgotPassword,  // Add this
-  getCompanies // Add this
+  setPassword,
+  forgotPassword,
+  getCompanies,
+  getAllAccessCombinations
 };

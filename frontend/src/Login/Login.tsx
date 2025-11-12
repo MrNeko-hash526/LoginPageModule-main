@@ -34,7 +34,12 @@ const Login: React.FC = () => {
       if (!data || !data.user) throw new Error('Invalid server response');
 
       setUser(data.user);
-      if (data.token) localStorage.setItem('token', data.token);
+      // Only set token if it exists (not null for multi-combinations)
+      if (data.token) {
+        localStorage.setItem('token', data.token);
+        // Notify app that auth token changed so components update immediately
+        window.dispatchEvent(new Event('authChanged'));
+      }
       localStorage.setItem('isAuthenticated', 'true');
 
       // Updated: Go to company selector after login
@@ -46,19 +51,31 @@ const Login: React.FC = () => {
     }
   };
 
-  // Add back: Handle company and role selection
+  // Updated: Handle company and role selection with role-based navigation
   const handleCompanyAndRoleSelection = async (selection: { companyId: string; companyName: string; roleId: number }) => {
     setIsLoading(true);
     setError(null);
+
+    // Validate user and userId
+    if (!user || (!user.user_id && !user._id)) {
+      setError('User not logged in or invalid user data. Please log in again.');
+      setIsLoading(false);
+      return;
+    }
+
+    const userId = user.user_id || user._id;  // Handle key mismatch (_id from sample data)
 
     try {
       const res = await fetch('/api/auth/select-role', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${localStorage.getItem('token')}`,
+          // No Authorization needed since middleware is removed
         },
-        body: JSON.stringify(selection),
+        body: JSON.stringify({
+          userId,  // Add userId to the body
+          ...selection,  // companyId, companyName, roleId
+        }),
       });
 
       if (!res.ok) {
@@ -69,8 +86,22 @@ const Login: React.FC = () => {
       const data = await res.json();
       if (!data.success) throw new Error(data.message);
 
-      // Updated: Redirect to ManageUser after selection
-      navigate('/manage-users');
+      // Store the new token from select-role response (if provided)
+      if (data.token) {
+        localStorage.setItem('token', data.token);
+        // Notify app that auth token changed so components update immediately
+        window.dispatchEvent(new Event('authChanged'));
+      }
+
+      // Updated: Role-based navigation after selection
+      const userRoles = data.user?.userTypes || [];  // Assuming userTypes is in the response
+      const isAdminOrManager = userRoles.some((role: string) => role.toLowerCase().includes('admin') || role.toLowerCase().includes('manager'));
+      
+      if (isAdminOrManager) {
+        navigate('/manage-users');  // Admin/Manager: Go to management dashboard
+      } else {
+        navigate('/dashboard-user');  // Employee: Go to general dashboard
+      }
     } catch (err: any) {
       setError(err?.message || 'Selection failed');
     } finally {

@@ -15,7 +15,8 @@ const { authenticateJWT } = require('./auth.middleware');
 
 router.post('/login', validateLogin, handleLogin);
 router.get('/companies-for-email', getCompaniesForEmail);
-router.post('/select-role', authenticateJWT, handleRoleSelection);
+// Updated: Remove authenticateJWT from select-role since no token is available yet
+router.post('/select-role', handleRoleSelection);
 router.get('/me', authenticateJWT, getProfile);
 
 // New: Users listing route with role-based access

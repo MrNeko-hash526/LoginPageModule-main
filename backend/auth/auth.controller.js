@@ -6,10 +6,12 @@ const {
   findUserById,
   getRolesForCompany,
   parseUserTypes,
-  buildAvailableCompanies
+  buildAvailableCompanies,
+  getAllAccessCombinations
 } = require('./auth.service');
 
 const JWT_SECRET = process.env.JWT_SECRET || 'change_me';
+const JWT_EXPIRES = process.env.JWT_EXPIRES || '24h';  // Updated expiry to 24h
 
 // Validation middleware
 const validateLogin = (req, res, next) => {
@@ -32,18 +34,19 @@ const validateLogin = (req, res, next) => {
   next();
 };
 
-// Updated: Handle login with optional companyId
+// Updated: Handle login with new logic
 const handleLogin = async (req, res) => {
   try {
-    const { email, password, companyId } = req.body;  // Added companyId
-    
+    const { email, password, companyId } = req.body;
     const result = await login(email, password, companyId, req);
     
     res.json({
       success: true,
       message: 'Login successful',
       user: result.user,
-      token: result.token
+      token: result.token,
+      autoLoggedIn: result.autoLoggedIn,
+      availableCombinations: result.user.availableCombinations || null
     });
   } catch (error) {
     console.error('Login controller error:', error);
@@ -54,31 +57,74 @@ const handleLogin = async (req, res) => {
   }
 };
 
-// Handle role selection
+// Updated: Handle role selection without JWT auth; extract userId from body and generate token
 const handleRoleSelection = async (req, res) => {
   try {
-    const authUser = req.user; // From JWT middleware
-    const { roleId, companyId } = req.body;
-    
-    if (!roleId || !companyId) {
+    const { userId, companyId, companyName, roleId } = req.body;
+
+    // Validate required fields
+    if (!userId || !companyId || !roleId) {
       return res.status(400).json({
         success: false,
-        message: 'roleId and companyId are required'
+        message: 'Missing required fields: userId, companyId, roleId'
       });
     }
 
-    const result = await selectRole(authUser.id, { roleId, companyId });
+    // Get user's available combinations to validate the selection
+    const combinations = await getAllAccessCombinations(userId);
     
-    res.json({
+    // Find the specific combination to validate it exists
+    const selectedCombination = combinations.find(combo => 
+      combo.company_id === parseInt(companyId) && combo.role_id === parseInt(roleId)
+    );
+
+    if (!selectedCombination) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid company/role combination for this user'
+      });
+    }
+
+    // Get the role name from the combination
+    const selectedRoleName = selectedCombination.role_name;
+
+    // CREATE THE NEW TOKEN WITH ONLY THE SELECTED ROLE
+    const tokenPayload = {
+      sub: userId,
+      id: userId, // Keep both for compatibility
+      email: selectedCombination.email || req.body.email, // You might need to pass email in request
+      company: {
+        id: parseInt(companyId),
+        name: companyName
+      },
+      // ONLY include the selected role, not all roles
+      selectedRole: selectedRoleName, // e.g., "Employee" or "Admin"
+      role_name: selectedRoleName,
+      role_id: parseInt(roleId),
+      userTypes: [selectedRoleName.toLowerCase()], // For compatibility with frontend parsing
+    };
+
+    const token = jwt.sign(tokenPayload, JWT_SECRET, { expiresIn: JWT_EXPIRES });
+
+    console.log('🔧 Generated token payload:', tokenPayload);
+
+    return res.json({
       success: true,
-      message: result.message,
-      user: result.user
+      message: 'Role selected successfully',
+      token: token,
+      user: {
+        user_id: userId,
+        email: tokenPayload.email,
+        selectedRole: selectedRoleName,
+        company: tokenPayload.company
+      }
     });
+
   } catch (error) {
-    console.error('Role selection controller error:', error);
-    res.status(error.status || 500).json({
+    console.error('❌ Select role error:', error);
+    return res.status(500).json({
       success: false,
-      message: error.message || 'Role selection failed'
+      message: 'Internal server error during role selection'
     });
   }
 };
