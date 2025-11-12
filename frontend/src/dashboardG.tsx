@@ -59,14 +59,6 @@ export default function DashboardG(): React.ReactElement {
           <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100">Dashboard Overview</h1>
           <p className="text-gray-600 dark:text-gray-400 mt-1">Welcome to your enterprise management platform</p>
         </div>
-        <div className="flex items-center gap-3">
-          <Link to="/add-user" className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700 transition-colors">
-            <PlusSquare className="w-4 h-4" /> Add User
-          </Link>
-          <Link to="/manage-users" className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
-            <Users className="w-4 h-4" /> Manage Users
-          </Link>
-        </div>
       </div>
 
       {/* Metrics Cards */}

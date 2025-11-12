@@ -14,19 +14,19 @@ type Role = string;
 function parseRolesFromToken(token?: string): Role[] {
   if (!token) return [];
   try {
-    const parts = token.split('.');
+    const parts = token.split('.')
     if (parts.length < 2) return [];
-    const payload = JSON.parse(atob(parts[1].replace(/-/g, '+').replace(/_/g, '/')));
+    const payload = JSON.parse(atob(parts[1].replace(/-/g, '+').replace(/_/g, '/')))
     
     // After role selection, the token should contain ONLY the selected role
     // Check for selectedRole first (this is what should be in token after selection)
-    const selectedRole = payload.selectedRole || payload.role_name;
+    const selectedRole = payload.selectedRole || payload.role_name
     if (selectedRole) {
-      return [String(selectedRole).toLowerCase()];
+      return [String(selectedRole).toLowerCase()]
     }
     
     // Fallback for multiple roles (before selection)
-    const raw = payload.roles || payload.userTypes || payload.role || null;
+    const raw = payload.roles || payload.userTypes || payload.role || null
     if (!raw) return [];
     if (Array.isArray(raw)) return raw.map((r: any) => String(r).toLowerCase());
     if (typeof raw === 'string') {
@@ -38,21 +38,32 @@ function parseRolesFromToken(token?: string): Role[] {
   }
 }
 
-// Protected Route Component
+// Protected Route Component (unchanged, but now used with updated roles)
 function ProtectedRoute({ children, requiredRoles }: { children: React.ReactNode; requiredRoles: string[] }) {
   const [roles, setRoles] = useState<Role[]>([]);
+  const [loading, setLoading] = useState(true); // Add this
 
   useEffect(() => {
     const loadRoles = () => {
       const token = localStorage.getItem('token') || undefined;
       setRoles(parseRolesFromToken(token));
+      setLoading(false); // Add this
     };
 
     loadRoles();
-    const onAuthChanged = () => loadRoles();
+    const onAuthChanged = () => { setLoading(true); loadRoles(); }; // Reset loading on change
+    const onStorage = (e: StorageEvent) => { if (e.key === 'token') { setLoading(true); loadRoles(); } }; // Reset loading
+    
     window.addEventListener('authChanged', onAuthChanged);
-    return () => window.removeEventListener('authChanged', onAuthChanged);
+    window.addEventListener('storage', onStorage);
+    
+    return () => {
+      window.removeEventListener('authChanged', onAuthChanged);
+      window.removeEventListener('storage', onStorage);
+    };
   }, []);
+
+  if (loading) return null; // Or <div>Loading...</div> for a spinner
 
   const hasRequiredRole = requiredRoles.some(role => 
     roles.some(userRole => userRole.includes(role.toLowerCase()))
@@ -87,7 +98,7 @@ export default function App(): React.ReactElement {
           <Route 
             path="/dashboard-admin" 
             element={
-              <ProtectedRoute requiredRoles={['admin', 'manager']}>
+              <ProtectedRoute requiredRoles={['admin', 'executive', 'manager']}> {/* Updated */}
                 <Dashboard />
               </ProtectedRoute>
             } 
@@ -95,7 +106,7 @@ export default function App(): React.ReactElement {
           <Route 
             path="/manage-users" 
             element={
-              <ProtectedRoute requiredRoles={['admin', 'manager']}>
+              <ProtectedRoute requiredRoles={['admin', 'executive', 'manager']}> {/* Updated */}
                 <ManageUser />
               </ProtectedRoute>
             } 
@@ -103,7 +114,7 @@ export default function App(): React.ReactElement {
           <Route 
             path="/add-user" 
             element={
-              <ProtectedRoute requiredRoles={['admin', 'manager']}>
+              <ProtectedRoute requiredRoles={['admin', 'executive', 'manager']}> {/* Updated */}
                 <AddUser />
               </ProtectedRoute>
             } 
@@ -111,7 +122,7 @@ export default function App(): React.ReactElement {
           <Route 
             path="/add-user/:id" 
             element={
-              <ProtectedRoute requiredRoles={['admin', 'manager']}>
+              <ProtectedRoute requiredRoles={['admin', 'executive', 'manager']}> {/* Updated */}
                 <AddUser />
               </ProtectedRoute>
             } 
@@ -119,7 +130,7 @@ export default function App(): React.ReactElement {
           <Route 
             path="/view-user/:id" 
             element={
-              <ProtectedRoute requiredRoles={['admin', 'manager']}>
+              <ProtectedRoute requiredRoles={['admin', 'executive', 'manager']}> {/* Updated */}
                 <AddUser />
               </ProtectedRoute>
             } 

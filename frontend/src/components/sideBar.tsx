@@ -56,12 +56,12 @@ export default function SideBar() {
     };
   }, []);
 
-  // Check if user has admin or manager role based on SELECTED role only
-  const isAdminOrManager = roles.some(role => 
-    role.includes('admin') || role.includes('manager')
+  // Check if user has admin, executive, or manager role based on SELECTED role only
+  const hasAdminAccess = roles.some(role => 
+    role.includes('admin') || role.includes('executive') || role.includes('manager')
   );
 
-  console.log('🔧 Sidebar roles:', roles, 'isAdminOrManager:', isAdminOrManager);
+  console.log('🔧 Sidebar roles:', roles, 'hasAdminAccess:', hasAdminAccess);
 
   const navItem = (to: string, label: string, Icon: any) => {
     // Updated: Consider root '/' and '/dashboard-user' as active for the general dashboard
@@ -108,10 +108,10 @@ export default function SideBar() {
         {/* General Dashboard: Always available */}
         {navItem('/dashboard-user', 'Dashboard', Home)}
         
-        {/* Admin/Manager only items */}
-        {isAdminOrManager && navItem('/dashboard-admin', 'Admin Dashboard', Shield)}
-        {isAdminOrManager && navItem('/manage-users', 'Manage Users', Users)}
-        {isAdminOrManager && navItem('/add-user', 'Add User', PlusSquare)}
+        {/* Admin/Executive/Manager only items */}
+        {hasAdminAccess && navItem('/dashboard-admin', 'Admin Dashboard', Shield)}
+        {hasAdminAccess && navItem('/manage-users', 'Manage Users', Users)}
+        {hasAdminAccess && navItem('/add-user', 'Add User', PlusSquare)}
       </nav>
 
       <div className="px-3 py-3 border-t border-gray-700">

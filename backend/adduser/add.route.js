@@ -1,16 +1,20 @@
 const express = require('express');
 const router = express.Router();
 const { createUser, getUserGroups, getUsers, getCompanies, getRoles, updateUser } = require('./add.controller');
-const { authenticateJWT, requireAdminOrManager } = require('./add.middleware');
+const { authenticateJWT } = require('../auth/auth.middleware'); // Use global JWT middleware
+const { checkRole } = require('../middleware/checkRole'); // New role-checking middleware
 
-router.post('/create-user', authenticateJWT, requireAdminOrManager, createUser);
-router.put('/users/:id/update', authenticateJWT, requireAdminOrManager, updateUser);  // Add this route
-router.get('/user-groups', authenticateJWT, requireAdminOrManager, getUserGroups);
-router.get('/users', authenticateJWT, requireAdminOrManager, getUsers);
-router.get('/companies', authenticateJWT, requireAdminOrManager, getCompanies);
-router.get('/roles', authenticateJWT, requireAdminOrManager, getRoles);
+// All these routes require Admin, Executive, or Manager roles
+const adminOrManagerOnly = checkRole(['Admin', 'Executive', 'Manager']);
 
-// Debug route to inspect token / roles
+router.post('/create-user', authenticateJWT, adminOrManagerOnly, createUser);
+router.put('/users/:id/update', authenticateJWT, adminOrManagerOnly, updateUser);
+router.get('/user-groups', authenticateJWT, adminOrManagerOnly, getUserGroups);
+router.get('/users', authenticateJWT, adminOrManagerOnly, getUsers);
+router.get('/companies', authenticateJWT, adminOrManagerOnly, getCompanies);
+router.get('/roles', authenticateJWT, adminOrManagerOnly, getRoles);
+
+// Debug route (optional - remove in production)
 router.get('/debug/auth', authenticateJWT, (req, res) => {
   res.json({ success: true, user: req.user });
 });
